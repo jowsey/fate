@@ -1,15 +1,17 @@
 #include <iostream>
+#include <array>
 #include <CLI/CLI.hpp>
 
 int main(const int argc, char** argv) {
     CLI::App app;
 
     app.name("velvet");
-    app.description("The Velvet game engine");
+    app.description("The Velvet game engine, v" VELVET_VERSION);
     app.footer("Learn more: https://github.com/placeholder/velvet");
+    app.require_subcommand(1);
+    app.set_version_flag("-v,--version", VELVET_VERSION);
 
     CLI::App* initCmd = app.add_subcommand("init", "Initialize a new project");
-
     initCmd->add_option("name", "Project name")->required();
 
     CLI11_PARSE(app, argc, argv);
@@ -26,12 +28,54 @@ int main(const int argc, char** argv) {
 
         std::cout << "Initializing project '" << name << "' at " << absolutePath.string() << std::endl;
 
+        // Build project directory
         if (!std::filesystem::exists(absolutePath)) {
             std::filesystem::create_directories(absolutePath);
         }
 
-        std::filesystem::create_directories(absolutePath / "Assets");
-        std::filesystem::create_directories(absolutePath / "ProjectSettings");
+        std::filesystem::path engineDir = std::filesystem::path(argv[0]).parent_path().parent_path();
+        std::filesystem::copy(engineDir / "Resources/ProjectTemplates/Default", absolutePath, std::filesystem::copy_options::recursive);
+
+        // Replace placeholder tags
+        const std::array<std::pair<std::string, std::string>, 1> TagReplacements = {
+            std::make_pair("{{ProjectName}}", name),
+        };
+
+        for (const auto&entry: std::filesystem::recursive_directory_iterator(absolutePath)) {
+            if (!entry.is_regular_file()) continue;
+
+            std::filesystem::path filePath = entry.path();
+
+            // Find in file content
+            if (std::ifstream inFile{filePath, std::ios::binary | std::ios::ate}) {
+                std::string content(inFile.tellg(), '\0');
+                inFile.seekg(0);
+                inFile.read(content.data(), content.size());
+                inFile.close();
+
+                for (const auto&[tag, replacement]: TagReplacements) {
+                    if (const std::size_t contentPos = content.find(tag); contentPos != std::string::npos) {
+                        content.replace(contentPos, tag.length(), replacement);
+
+                        if (std::ofstream outFile{filePath, std::ios::binary}) {
+                            outFile.write(content.data(), content.size());
+                        }
+                    }
+                }
+            }
+
+            // Find in file name
+            std::string filename = filePath.filename().string();
+
+            for (const auto&[tag, replacement]: TagReplacements) {
+                const std::size_t pos = filename.find(tag);
+                if (pos != std::string::npos) {
+                    filename.replace(pos, tag.length(), replacement);
+                    std::filesystem::path newFilePath = filePath.parent_path() / filename;
+                    std::filesystem::rename(filePath, newFilePath);
+                }
+            }
+        }
     }
 
     return 0;
