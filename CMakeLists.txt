@@ -11,6 +11,10 @@ add_executable(fate
         src/FateRenderer.cpp
         src/FateRenderer.h
         src/util/Utils.cpp
+        src/FateEngine.cpp
+        src/FateEngine.h
+        src/SceneObject.cpp
+        src/SceneObject.h
 )
 
 target_compile_definitions(fate PRIVATE FATE_VERSION="${PROJECT_VERSION}")
@@ -26,8 +30,8 @@ set_target_properties(fate PROPERTIES
 )
 
 add_custom_command(TARGET fate POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E remove_directory "${CMAKE_CURRENT_BINARY_DIR}/dist/Resources"
-        COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/Resources" "${CMAKE_CURRENT_BINARY_DIR}/dist/Resources"
+        COMMAND ${CMAKE_COMMAND} -E remove_directory "${CMAKE_CURRENT_BINARY_DIR}/dist/resources"
+        COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/resources" "${CMAKE_CURRENT_BINARY_DIR}/dist/resources"
 )
 
 # glad

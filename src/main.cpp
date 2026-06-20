@@ -1,11 +1,8 @@
-#include "FateRenderer.h"
+#include "FateEngine.h"
 
 int main(const int argc, char** argv) {
-    const FateRenderer renderer;
-
-    while (!glfwWindowShouldClose(renderer.getWindow())) {
-        renderer.render();
-    }
+    const FateEngine engine;
+    engine.run();
 
     return 0;
 }

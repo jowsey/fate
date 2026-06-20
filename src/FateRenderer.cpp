@@ -3,7 +3,9 @@
 
 #include "FateRenderer.h"
 
+#include <fstream>
 #include <iostream>
+#include <sstream>
 
 #include "glm/glm.hpp"
 #include "glm/gtc/matrix_transform.hpp"
@@ -40,6 +42,18 @@ GLuint FateRenderer::compileShader(const GLuint type, const std::string_view sou
     return shader;
 }
 
+GLuint FateRenderer::loadShader(const GLuint type, const std::filesystem::path&path) {
+    std::ifstream file(path);
+    if (!file.is_open()) {
+        throw std::runtime_error("failed to open shader file: " + path.string());
+    }
+
+    std::stringstream buffer;
+    buffer << file.rdbuf();
+
+    return compileShader(type, buffer.str());
+}
+
 FateRenderer::FateRenderer() {
     // glfw window setup
     if (!glfwInit()) throw std::runtime_error("failed to initialize GLFW");
@@ -72,34 +86,9 @@ FateRenderer::FateRenderer() {
     }
 
     // shaders
-    constexpr std::string_view vertexShaderSource = R"(
-        #version 460 core
-        layout (location = 0) in vec3 aPos;
-        layout (location = 1) in vec3 aColor;
-
-        layout (location = 0) uniform mat4 u_MVP;
-
-        out vec3 ourColor;
-
-        void main() {
-            gl_Position = u_MVP * vec4(aPos, 1.0);
-            ourColor = aColor;
-        }
-    )";
-
-    constexpr std::string_view fragmentShaderSource = R"(
-        #version 460 core
-
-        out vec4 FragColor;
-        in vec3 ourColor;
-
-        void main() {
-            FragColor = vec4(ourColor, 1.0);
-        }
-    )";
-
-    const GLuint vertexShader = compileShader(GL_VERTEX_SHADER, vertexShaderSource);
-    const GLuint fragmentShader = compileShader(GL_FRAGMENT_SHADER, fragmentShaderSource);
+    const auto shaderPath = getExecutablePath().parent_path().parent_path() / "resources/Shaders";
+    const GLuint vertexShader = loadShader(GL_VERTEX_SHADER, shaderPath / "lit.vert");
+    const GLuint fragmentShader = loadShader(GL_FRAGMENT_SHADER, shaderPath / "lit.frag");
 
     shaderProgram = glCreateProgram();
     glAttachShader(shaderProgram, vertexShader);
@@ -140,14 +129,14 @@ FateRenderer::FateRenderer() {
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
-    io.Fonts->AddFontFromFileTTF(getExecutablePath().parent_path().parent_path().append("Resources/Inter_18pt-Regular.ttf").string().c_str());
+    io.Fonts->AddFontFromFileTTF(getExecutablePath().parent_path().parent_path().append("resources/Fonts/Inter_18pt-Regular.ttf").string().c_str());
 
     constexpr auto bgLight = ImColor(42, 42, 42);
     constexpr auto bgDark = ImColor(26, 26, 26);
     constexpr auto border = ImColor(64, 64, 64);
 
     ImGuiStyle&style = ImGui::GetStyle();
-    style.FontSizeBase = 14.0f;
+    style.FontSizeBase = 16.0f;
 
     style.WindowRounding = 4.0f;
     style.PopupRounding = 4.0f;
@@ -233,8 +222,6 @@ void FateRenderer::render() const {
     }
 
     ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
-
-    ImGui::ShowStyleEditor();
 
     ImGui::Begin("fate");
 
