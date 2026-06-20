@@ -1,14 +1,20 @@
 #pragma once
 #include <string>
 
-#include <glm/glm.hpp>
+#include "MeshHandle.h"
+#include "SceneTransform.h"
 
 class SceneObject {
-    glm::mat4 transform;
     std::string name;
+    SceneTransform transform;
+    std::shared_ptr<MeshHandle> meshHandle;
 
 public:
-    explicit SceneObject(std::string name);
+    explicit SceneObject(std::string name, std::shared_ptr<MeshHandle> mesh);
 
-    [[nodiscard]] const glm::mat4& getTransform() const { return transform; }
+    [[nodiscard]] const std::string& getName() const { return name; }
+
+    [[nodiscard]] SceneTransform& getTransform() { return transform; }
+
+    [[nodiscard]] const std::shared_ptr<MeshHandle>& getMeshHandle() const { return meshHandle; }
 };

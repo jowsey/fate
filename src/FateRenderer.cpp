@@ -6,6 +6,7 @@
 #include <fstream>
 #include <iostream>
 #include <sstream>
+#include <vector>
 
 #include "glm/glm.hpp"
 #include "glm/gtc/matrix_transform.hpp"
@@ -14,6 +15,7 @@
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
+#include "Scene.h"
 
 #include "util/Utils.h"
 
@@ -98,17 +100,14 @@ FateRenderer::FateRenderer() {
     glDeleteShader(vertexShader);
     glDeleteShader(fragmentShader);
 
-    // vertices
-    constexpr std::array<float, 6 * 3> vertices = {
-        0.0f, 0.5f, 0.0f, 1.0f, 0.0f, 0.0f,
-        -0.5f, 0.0f, 0.0f, 0.0f, 1.0f, 0.0f,
-        0.5f, 0.0f, 0.0f, 0.0f, 0.0f, 1.0f,
-    };
+    // buffers
+    glCreateBuffers(1, &vbo);
+    glNamedBufferStorage(vbo, DefaultBufferSize, nullptr, GL_DYNAMIC_STORAGE_BIT);
+
+    glCreateBuffers(1, &ebo);
+    glNamedBufferStorage(ebo, DefaultBufferSize, nullptr, GL_DYNAMIC_STORAGE_BIT);
 
     glCreateVertexArrays(1, &vao);
-    glCreateBuffers(1, &vbo);
-
-    glNamedBufferStorage(vbo, vertices.size() * sizeof(float), vertices.data(), 0);
     glVertexArrayVertexBuffer(vao, 0, vbo, 0, 6 * sizeof(float));
 
     glEnableVertexArrayAttrib(vao, 0);
@@ -172,7 +171,9 @@ FateRenderer::~FateRenderer() {
     ImGui::DestroyContext();
 }
 
-void FateRenderer::render() const {
+// todo should we generate all these in the engine instead of the renderer?
+
+void FateRenderer::render(const Scene&scene) const {
     glfwPollEvents();
 
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
@@ -197,23 +198,42 @@ void FateRenderer::render() const {
     constexpr float camHorFovDegs = 60.0f;
     const float fovYRads = 2.0f * glm::atan(glm::tan(glm::radians(camHorFovDegs) * 0.5f) / winAspect);
 
+    const glm::vec3 cameraPosition = glm::vec3(0.0f, 0.0f, -2.5f);
+
     const glm::mat4 proj = glm::perspective(fovYRads, winAspect, 0.01f, 100.0f);
-    const glm::mat4 view = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -2.5f));
-    const glm::mat4 model = glm::rotate(glm::mat4(1.0f), time, glm::vec3(0.0f, 1.0f, 0.0f));
+    const glm::mat4 view = glm::translate(glm::mat4(1.0f), cameraPosition);
 
-    glm::mat4 mvp = proj * view * model;
+    for (const auto object: scene.getObjects()) {
+        auto transform = object->getTransform();
+        glm::mat4 mvp = proj * view * glm::mat4(transform.getWorldMatrix());
 
-    glProgramUniformMatrix4fv(shaderProgram, 0, 1, GL_FALSE, glm::value_ptr(mvp));
+        glProgramUniformMatrix4fv(shaderProgram, 0, 1, GL_FALSE, glm::value_ptr(mvp));
 
-    glUseProgram(shaderProgram);
-    glBindVertexArray(vao);
-    glDrawArrays(GL_TRIANGLES, 0, 3);
+        glUseProgram(shaderProgram);
+        glBindVertexArray(vao);
 
+        glDrawArrays(GL_TRIANGLES, object->getMeshHandle()->getBaseVertex(), 3);
+    }
+
+    // editor ui
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("File")) {
             if (ImGui::MenuItem("Exit")) {
                 glfwSetWindowShouldClose(window, true);
             }
+
+            ImGui::EndMenu();
+        }
+
+        if (ImGui::BeginMenu("Help")) {
+            if (ImGui::MenuItem("View on GitHub")) {
+                openBrowser("https://github.com/jowsey/fate");
+            }
+
+            ImGui::Separator();
+
+            ImGui::MenuItem("the Fate game engine", nullptr, nullptr, false);
+            ImGui::MenuItem("v" FATE_VERSION, nullptr, nullptr, false);
 
             ImGui::EndMenu();
         }
@@ -225,10 +245,17 @@ void FateRenderer::render() const {
 
     ImGui::Begin("fate");
 
-    ImGui::Text("hi guys");
-    if (ImGui::Button("press me")) {
-        ImGui::Text("button pressed");
-    }
+    ImGui::ProgressBar(
+        static_cast<float>(vboOffset) / DefaultBufferSize,
+        ImVec2(-1.0f, 0.0f),
+        std::format("VBO usage: {} ({:.5f}%)", prettyBytes(vboOffset), static_cast<float>(vboOffset) / DefaultBufferSize * 100.0f).c_str()
+    );
+
+    ImGui::ProgressBar(
+        static_cast<float>(eboOffset) / DefaultBufferSize,
+        ImVec2(-1.0f, 0.0f),
+        std::format("EBO usage: {} ({:.5f}%)", prettyBytes(eboOffset), static_cast<float>(eboOffset) / DefaultBufferSize * 100.0f).c_str()
+    );
 
     ImGui::End();
 
@@ -236,4 +263,31 @@ void FateRenderer::render() const {
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
     glfwSwapBuffers(window);
+}
+
+MeshHandle FateRenderer::uploadMesh(const std::vector<Vertex>&vertices, const std::vector<std::uint32_t>&indices) {
+    const auto vboSpaceNeeded = vertices.size() * sizeof(Vertex);
+    const auto eboSpaceNeeded = indices.size() * sizeof(std::uint32_t);
+
+    // todo store all active allocations and look for cleared spots, then in worst case, make a new pool and batch per-pool
+    if (vboOffset + vboSpaceNeeded > DefaultBufferSize) {
+        throw std::runtime_error("VBO buffer overflow, see todo");
+    }
+
+    if (eboOffset + eboSpaceNeeded > DefaultBufferSize) {
+        throw std::runtime_error("EBO buffer overflow, see todo");
+    }
+
+    std::println("Uploading mesh with {} vertices ({}) and {} indices ({})", vertices.size(), prettyBytes(vboSpaceNeeded), indices.size(), prettyBytes(eboSpaceNeeded));
+
+    glNamedBufferSubData(vbo, vboOffset, vertices.size() * sizeof(Vertex), vertices.data());
+    glNamedBufferSubData(ebo, eboOffset, indices.size() * sizeof(std::uint32_t), indices.data());
+
+    const std::size_t vboStoredIndex = vboOffset;
+    const std::size_t eboStoredIndex = eboOffset;
+
+    vboOffset += vboSpaceNeeded;
+    eboOffset += eboSpaceNeeded;
+
+    return MeshHandle(vboStoredIndex, eboStoredIndex);
 }

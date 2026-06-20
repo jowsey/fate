@@ -11,10 +11,19 @@ add_executable(fate
         src/FateRenderer.cpp
         src/FateRenderer.h
         src/util/Utils.cpp
+        src/util/Utils.h
         src/FateEngine.cpp
         src/FateEngine.h
         src/SceneObject.cpp
         src/SceneObject.h
+        src/Scene.cpp
+        src/Scene.h
+        src/SceneTransform.cpp
+        src/SceneTransform.h
+        src/Vertex.cpp
+        src/Vertex.h
+        src/MeshHandle.cpp
+        src/MeshHandle.h
 )
 
 target_compile_definitions(fate PRIVATE FATE_VERSION="${PROJECT_VERSION}")

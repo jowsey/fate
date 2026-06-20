@@ -1,5 +1,7 @@
 #include "SceneObject.h"
 
-SceneObject::SceneObject(std::string name)
-    : transform(glm::mat4(1.0f)), name(std::move(name)) {
+#include <utility>
+
+SceneObject::SceneObject(std::string name, std::shared_ptr<MeshHandle> mesh)
+    : name(std::move(name)), transform(*this), meshHandle(std::move(mesh)) {
 }
