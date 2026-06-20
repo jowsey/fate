@@ -5,11 +5,11 @@
 int main(const int argc, char** argv) {
     CLI::App app;
 
-    app.name("velvet");
-    app.description("The Velvet game engine, v" VELVET_VERSION);
-    app.footer("Learn more: https://github.com/placeholder/velvet");
+    app.name("fate");
+    app.description("The Fate game engine, v" FATE_VERSION);
+    app.footer("Learn more: https://github.com/jowsey/fate");
     app.require_subcommand(1);
-    app.set_version_flag("-v,--version", VELVET_VERSION);
+    app.set_version_flag("-v,--version", FATE_VERSION);
 
     CLI::App* initCmd = app.add_subcommand("init", "Initialize a new project");
     initCmd->add_option("name", "Project name")->required();
@@ -17,7 +17,7 @@ int main(const int argc, char** argv) {
     CLI11_PARSE(app, argc, argv);
 
     if (initCmd->parsed()) {
-        const std::string name = initCmd->get_option("name")->as<std::string>();
+        const auto name = initCmd->get_option("name")->as<std::string>();
         const auto relativePath = std::filesystem::path(name);
         const auto absolutePath = std::filesystem::absolute(relativePath);
 
@@ -44,7 +44,7 @@ int main(const int argc, char** argv) {
         for (const auto&entry: std::filesystem::recursive_directory_iterator(absolutePath)) {
             if (!entry.is_regular_file()) continue;
 
-            std::filesystem::path filePath = entry.path();
+            const std::filesystem::path& filePath = entry.path();
 
             // Find in file content
             if (std::ifstream inFile{filePath, std::ios::binary | std::ios::ate}) {
