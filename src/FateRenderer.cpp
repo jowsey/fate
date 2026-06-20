@@ -9,13 +9,18 @@
 #include "glm/gtc/matrix_transform.hpp"
 #include "glm/gtc/type_ptr.inl"
 
+#include "imgui.h"
+#include "imgui_impl_glfw.h"
+#include "imgui_impl_opengl3.h"
+
+#include "util/Utils.h"
+
 void APIENTRY glDebugOutput(GLenum source, GLenum type, unsigned int id, GLenum severity, GLsizei length, const char* message, const void* userParam) {
     // suppress non-significant
     if (id == 131169 || id == 131185 || id == 131218 || id == 131204) return;
 
     std::println(stderr, "OpenGL debug message ({}): {}", id, message);
 }
-
 
 GLuint FateRenderer::compileShader(const GLuint type, const std::string_view source) {
     const char* src = source.data();
@@ -126,6 +131,44 @@ FateRenderer::FateRenderer() {
     glVertexArrayAttribBinding(vao, 1, 0);
 
     glEnable(GL_DEPTH_TEST);
+
+    // imgui
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+
+    ImGuiIO&io = ImGui::GetIO();
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+
+    io.Fonts->AddFontFromFileTTF(getExecutablePath().parent_path().parent_path().append("Resources/Inter_18pt-Regular.ttf").string().c_str());
+
+    constexpr auto bgLight = ImColor(42, 42, 42);
+    constexpr auto bgDark = ImColor(26, 26, 26);
+    constexpr auto border = ImColor(64, 64, 64);
+
+    ImGuiStyle&style = ImGui::GetStyle();
+    style.FontSizeBase = 14.0f;
+
+    style.WindowRounding = 4.0f;
+    style.PopupRounding = 4.0f;
+    style.FrameRounding = 2.0f;
+
+    style.PopupBorderSize = 0.0f;
+
+    style.Colors[ImGuiCol_WindowBg] = bgLight;
+    style.Colors[ImGuiCol_TitleBg] = bgDark;
+    style.Colors[ImGuiCol_TitleBgActive] = bgDark;
+    style.Colors[ImGuiCol_MenuBarBg] = bgDark;
+    style.Colors[ImGuiCol_Border] = border;
+    style.Colors[ImGuiCol_PopupBg] = bgDark;
+
+    float contentScale;
+    glfwGetWindowContentScale(window, &contentScale, nullptr);
+    style.FontScaleDpi = contentScale;
+    style.ScaleAllSizes(contentScale);
+
+    ImGui_ImplGlfw_InitForOpenGL(window, true);
+    ImGui_ImplOpenGL3_Init();
 }
 
 FateRenderer::~FateRenderer() {
@@ -134,24 +177,38 @@ FateRenderer::~FateRenderer() {
     glDeleteProgram(shaderProgram);
 
     glfwTerminate();
+
+    ImGui_ImplOpenGL3_Shutdown();
+    ImGui_ImplGlfw_Shutdown();
+    ImGui::DestroyContext();
 }
 
 void FateRenderer::render() const {
-    glClearColor(0.1f, 0.1f, 0.12f, 1.0f);
+    glfwPollEvents();
 
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
         glfwSetWindowShouldClose(window, true);
     }
 
+    ImGui_ImplOpenGL3_NewFrame();
+    ImGui_ImplGlfw_NewFrame();
+    ImGui::NewFrame();
+
+    glClearColor(0.1f, 0.1f, 0.12f, 1.0f);
+    glClearDepth(1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     int winWidth;
     int winHeight;
     glfwGetFramebufferSize(window, &winWidth, &winHeight);
+    const float winAspect = static_cast<float>(winWidth) / winHeight;
 
     const auto time = static_cast<float>(glfwGetTime());
 
-    const glm::mat4 proj = glm::perspective(glm::radians(45.0f), static_cast<float>(winWidth) / winHeight, 0.01f, 100.0f);
+    constexpr float camHorFovDegs = 60.0f;
+    const float fovYRads = 2.0f * glm::atan(glm::tan(glm::radians(camHorFovDegs) * 0.5f) / winAspect);
+
+    const glm::mat4 proj = glm::perspective(fovYRads, winAspect, 0.01f, 100.0f);
     const glm::mat4 view = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -2.5f));
     const glm::mat4 model = glm::rotate(glm::mat4(1.0f), time, glm::vec3(0.0f, 1.0f, 0.0f));
 
@@ -163,6 +220,33 @@ void FateRenderer::render() const {
     glBindVertexArray(vao);
     glDrawArrays(GL_TRIANGLES, 0, 3);
 
+    if (ImGui::BeginMainMenuBar()) {
+        if (ImGui::BeginMenu("File")) {
+            if (ImGui::MenuItem("Exit")) {
+                glfwSetWindowShouldClose(window, true);
+            }
+
+            ImGui::EndMenu();
+        }
+
+        ImGui::EndMainMenuBar();
+    }
+
+    ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
+
+    ImGui::ShowStyleEditor();
+
+    ImGui::Begin("fate");
+
+    ImGui::Text("hi guys");
+    if (ImGui::Button("press me")) {
+        ImGui::Text("button pressed");
+    }
+
+    ImGui::End();
+
+    ImGui::Render();
+    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
     glfwSwapBuffers(window);
-    glfwPollEvents();
 }

@@ -2,6 +2,8 @@
 #include <array>
 #include <CLI/CLI.hpp>
 
+#include "src/util/Utils.h"
+
 int main(const int argc, char** argv) {
     CLI::App app;
 
@@ -33,7 +35,7 @@ int main(const int argc, char** argv) {
             std::filesystem::create_directories(absolutePath);
         }
 
-        std::filesystem::path engineDir = std::filesystem::path(argv[0]).parent_path().parent_path();
+        std::filesystem::path engineDir = getExecutablePath().parent_path().parent_path();
         std::filesystem::copy(engineDir / "Resources/ProjectTemplates/Default", absolutePath, std::filesystem::copy_options::recursive);
 
         // Replace placeholder tags
@@ -44,7 +46,7 @@ int main(const int argc, char** argv) {
         for (const auto&entry: std::filesystem::recursive_directory_iterator(absolutePath)) {
             if (!entry.is_regular_file()) continue;
 
-            const std::filesystem::path& filePath = entry.path();
+            const std::filesystem::path&filePath = entry.path();
 
             // Find in file content
             if (std::ifstream inFile{filePath, std::ios::binary | std::ios::ate}) {
