@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.31)
+cmake_minimum_required(VERSION 3.31...4.3)
 project(fate VERSION 0.1.0)
 
 set(CMAKE_CXX_STANDARD 26)
@@ -61,6 +61,7 @@ FetchContent_Declare(
         glfw
         GIT_REPOSITORY https://github.com/glfw/glfw.git
         GIT_TAG 3.4
+        GIT_SHALLOW TRUE
 )
 
 set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
@@ -75,6 +76,7 @@ FetchContent_Declare(
         glm
         GIT_REPOSITORY https://github.com/g-truc/glm.git
         GIT_TAG 1.0.3
+        GIT_SHALLOW TRUE
 )
 
 FetchContent_MakeAvailable(glm)
@@ -85,6 +87,7 @@ FetchContent_Declare(
         imgui
         GIT_REPOSITORY https://github.com/ocornut/imgui.git
         GIT_TAG v1.92.8-docking
+        GIT_SHALLOW TRUE
 )
 
 FetchContent_MakeAvailable(imgui)
@@ -105,8 +108,9 @@ target_include_directories(imgui PUBLIC
         ${imgui_SOURCE_DIR}/backends
 )
 
-target_link_libraries(imgui PRIVATE glfw)
+target_compile_definitions(imgui PUBLIC IMGUI_DISABLE_DEFAULT_FONT)
 
+target_link_libraries(imgui PRIVATE glfw)
 target_link_libraries(fate PRIVATE imgui)
 
 # CLI11
@@ -115,6 +119,7 @@ FetchContent_Declare(
         QUIET
         GIT_REPOSITORY https://github.com/CLIUtils/CLI11.git
         GIT_TAG v2.6.2
+        GIT_SHALLOW TRUE
 )
 
 FetchContent_MakeAvailable(CLI11)
