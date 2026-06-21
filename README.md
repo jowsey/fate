@@ -1,5 +1,6 @@
 <div align="middle">
-    <img src=".github/fate.png" width="512" alt="the fate logo" />
+    <img src=".github/fate-banner-logo.webp" width="512" alt="the fate logo" />
+    <br/>
     <h1>the Fate game engine</h1>
 </div>
 
