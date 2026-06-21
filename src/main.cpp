@@ -4,27 +4,57 @@
 
 int main(const int argc, char** argv) {
     FateEngine engine;
+
+    const auto triangleMesh = std::make_shared<Mesh>(
+        std::vector<Vertex>{
+            Vertex({0.0f, 0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}),
+            Vertex({-0.5f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}),
+            Vertex({0.5f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}),
+        },
+        std::vector<std::uint32_t>{0, 1, 2}
+    );
+
+    const auto cubeMesh = std::make_shared<Mesh>(
+        std::vector<Vertex>{
+            Vertex({-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}),
+            Vertex({0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}),
+            Vertex({0.5f, 0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}),
+            Vertex({-0.5f, 0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}),
+            Vertex({-0.5f, -0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}),
+            Vertex({0.5f, -0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}),
+            Vertex({0.5f, 0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}),
+            Vertex({-0.5f, 0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}),
+        },
+        std::vector<std::uint32_t>{
+            0, 1, 2, 2, 3, 0, // front
+            4, 5, 6, 6, 7, 4, // back
+            0, 1, 5, 5, 4, 0, // bottom
+            2, 3, 7, 7, 6, 2, // top
+            0, 3, 7, 7, 4, 0, // left
+            1, 2, 6, 6, 5, 1 // right
+        }
+    );
+
     const auto triangleMeshHandle = std::make_shared<MeshHandle>(
-        engine.getRenderer().uploadMesh(
-            {
-                Vertex({0.0f, 0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}),
-                Vertex({-0.5f, 0.0f, 0.0f}, {0.0f, 1.0f, 0.0f}),
-                Vertex({0.5f, 0.0f, 0.0f}, {0.0f, 0.0f, 1.0f}),
-            },
-            {0, 1, 2}
-        )
+        engine.getRenderer().uploadMesh(triangleMesh->getVertices(), triangleMesh->getIndices())
+    );
+
+    const auto cubeMeshHandle = std::make_shared<MeshHandle>(
+        engine.getRenderer().uploadMesh(cubeMesh->getVertices(), cubeMesh->getIndices())
     );
 
     auto mainScene = std::make_unique<Scene>("Main");
 
-    auto triangle = SceneObject("Triangle", triangleMeshHandle);
-    auto triangle2 = SceneObject("Triangle2", triangleMeshHandle);
-
+    auto triangle = SceneObject("Triangle", triangleMesh, triangleMeshHandle);
+    auto triangle2 = SceneObject("Triangle2", triangleMesh, triangleMeshHandle);
     triangle2.getTransform().setPosition({0.5f, -0.5f, 0});
     triangle2.getTransform().setRotation(glm::angleAxis(glm::radians(-90.0f), glm::vec3(0, 0, 1)));
+    auto cube = SceneObject("Cube", cubeMesh, cubeMeshHandle);
+    cube.getTransform().setPosition({0.0f, -1.0f, 0});
 
     mainScene->addObject(triangle);
     mainScene->addObject(triangle2);
+    mainScene->addObject(cube);
 
     engine.setActiveScene(std::move(mainScene));
     engine.run();

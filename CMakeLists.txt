@@ -24,6 +24,8 @@ add_executable(fate
         src/Vertex.h
         src/MeshHandle.cpp
         src/MeshHandle.h
+        src/Mesh.cpp
+        src/Mesh.h
 )
 
 target_compile_definitions(fate PRIVATE FATE_VERSION="${PROJECT_VERSION}")

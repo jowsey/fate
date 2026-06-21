@@ -207,11 +207,10 @@ void FateRenderer::render(const Scene&scene) {
 
     constexpr float camHorFovDegs = 60.0f;
     const float fovYRads = 2.0f * glm::atan(glm::tan(glm::radians(camHorFovDegs) * 0.5f) / winAspect);
-
-    const glm::vec3 cameraPosition = glm::vec3(0.0f, 0.0f, -2.5f);
-
     const glm::mat4 proj = glm::perspective(fovYRads, winAspect, 0.01f, 100.0f);
-    const glm::mat4 view = glm::translate(glm::mat4(1.0f), cameraPosition);
+
+    constexpr glm::vec3 cameraPosition = glm::vec3(0.0f, 0.0f, 2.5f);
+    constexpr glm::mat4 view = glm::translate(glm::mat4(1.0f), -cameraPosition);
 
     indirectBuffer.clear();
 
@@ -221,7 +220,7 @@ void FateRenderer::render(const Scene&scene) {
 
         // todo this can obviously be cached
         indirectBuffer.emplace_back(DrawElementsIndirectCommand{
-            .count = 3,
+            .count = static_cast<GLuint>(object->getMesh()->getIndices().size()),
             .instanceCount = 1,
             .firstIndex = object->getMeshHandle()->getFirstIndex(),
             .baseVertex = object->getMeshHandle()->getBaseVertex(),
@@ -305,19 +304,19 @@ void FateRenderer::render(const Scene&scene) {
 }
 
 MeshHandle FateRenderer::uploadMesh(const std::vector<Vertex>&vertices, const std::vector<std::uint32_t>&indices) {
-    const auto vboSpaceNeeded = vertices.size() * sizeof(Vertex);
-    const auto eboSpaceNeeded = indices.size() * sizeof(std::uint32_t);
+    const auto vboBytesNeeded = vertices.size() * sizeof(Vertex);
+    const auto eboBytesNeeded = indices.size() * sizeof(std::uint32_t);
 
     // todo store all active allocations and look for cleared spots, then in worst case, make a new pool and batch per-pool
-    if (vboOffset + vboSpaceNeeded > DefaultBufferSize) {
+    if (vboOffset + vboBytesNeeded > DefaultBufferSize) {
         throw std::runtime_error("VBO buffer overflow, see todo");
     }
 
-    if (eboOffset + eboSpaceNeeded > DefaultBufferSize) {
+    if (eboOffset + eboBytesNeeded > DefaultBufferSize) {
         throw std::runtime_error("EBO buffer overflow, see todo");
     }
 
-    std::println("Uploading mesh with {} vertices ({}) and {} indices ({})", vertices.size(), prettyBytes(vboSpaceNeeded), indices.size(), prettyBytes(eboSpaceNeeded));
+    std::println("Uploading mesh with {} vertices ({}) and {} indices ({})", vertices.size(), prettyBytes(vboBytesNeeded), indices.size(), prettyBytes(eboBytesNeeded));
 
     glNamedBufferSubData(vbo, vboOffset, vertices.size() * sizeof(Vertex), vertices.data());
     glNamedBufferSubData(ebo, eboOffset, indices.size() * sizeof(std::uint32_t), indices.data());
@@ -325,8 +324,8 @@ MeshHandle FateRenderer::uploadMesh(const std::vector<Vertex>&vertices, const st
     const std::size_t vboStoredIndex = vboOffset;
     const std::size_t eboStoredIndex = eboOffset;
 
-    vboOffset += vboSpaceNeeded;
-    eboOffset += eboSpaceNeeded;
+    vboOffset += vboBytesNeeded;
+    eboOffset += eboBytesNeeded;
 
-    return MeshHandle(vboStoredIndex, eboStoredIndex);
+    return MeshHandle(vboStoredIndex / sizeof(Vertex), eboStoredIndex / sizeof(std::uint32_t));
 }
