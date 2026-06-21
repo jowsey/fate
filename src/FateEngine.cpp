@@ -14,7 +14,7 @@ void FateEngine::run() {
         glfwPollEvents();
 
         const double currentTime = glfwGetTime();
-        const double deltaTime = currentTime - lastTime;
+        deltaTime = currentTime - lastTime;
         lastTime = currentTime;
 
         renderer.render(*activeScene);
