@@ -10,7 +10,7 @@ class FateEngine {
     std::unique_ptr<Scene> activeScene;
 
 public:
-    void run() const;
+    void run();
 
     void setActiveScene(std::unique_ptr<Scene> scene);
 

@@ -2,7 +2,7 @@
 
 #include "Scene.h"
 
-void FateEngine::run() const {
+void FateEngine::run() {
     while (!glfwWindowShouldClose(renderer.getWindow())) {
         renderer.render(*activeScene);
     }

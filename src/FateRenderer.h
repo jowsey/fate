@@ -11,6 +11,18 @@
 #include "Scene.h"
 #include "Vertex.h"
 
+struct TransformBuffer {
+    glm::mat4 modelMatrices[];
+};
+
+struct DrawElementsIndirectCommand {
+    GLuint count;
+    GLuint instanceCount;
+    GLuint firstIndex;
+    GLuint baseVertex;
+    GLuint baseInstance;
+};
+
 class FateRenderer {
     static constexpr int DefaultBufferSize = 1024 * 1024 * 64; // 64mb
 
@@ -24,6 +36,10 @@ class FateRenderer {
     GLuint vbo{};
     GLuint ebo{};
     GLuint vao{};
+    GLuint dib{};
+    GLuint transformBufferSsbo{};
+
+    std::vector<DrawElementsIndirectCommand> indirectBuffer{};
 
     std::size_t vboOffset{0};
     std::size_t eboOffset{0};
@@ -33,7 +49,7 @@ public:
 
     ~FateRenderer();
 
-    void render(const Scene&scene) const;
+    void render(const Scene&scene);
 
     [[nodiscard]] GLFWwindow* getWindow() const { return window; }
 

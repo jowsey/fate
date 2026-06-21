@@ -101,14 +101,20 @@ FateRenderer::FateRenderer() {
     glDeleteShader(fragmentShader);
 
     // buffers
+
+    // vertex buffer
     glCreateBuffers(1, &vbo);
     glNamedBufferStorage(vbo, DefaultBufferSize, nullptr, GL_DYNAMIC_STORAGE_BIT);
 
+    // element buffer
     glCreateBuffers(1, &ebo);
     glNamedBufferStorage(ebo, DefaultBufferSize, nullptr, GL_DYNAMIC_STORAGE_BIT);
 
+    // vertex array
     glCreateVertexArrays(1, &vao);
-    glVertexArrayVertexBuffer(vao, 0, vbo, 0, 6 * sizeof(float));
+
+    glVertexArrayVertexBuffer(vao, 0, vbo, 0, sizeof(Vertex));
+    glVertexArrayElementBuffer(vao, ebo);
 
     glEnableVertexArrayAttrib(vao, 0);
     glVertexArrayAttribFormat(vao, 0, 3, GL_FLOAT, GL_FALSE, 0);
@@ -117,6 +123,14 @@ FateRenderer::FateRenderer() {
     glEnableVertexArrayAttrib(vao, 1);
     glVertexArrayAttribFormat(vao, 1, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float));
     glVertexArrayAttribBinding(vao, 1, 0);
+
+    // transformbuffer ssbo
+    glCreateBuffers(1, &transformBufferSsbo);
+    glNamedBufferStorage(transformBufferSsbo, 128 * sizeof(glm::mat4), nullptr, GL_DYNAMIC_STORAGE_BIT);
+
+    // draw indirect buffer
+    glCreateBuffers(1, &dib);
+    glNamedBufferStorage(dib, 128 * sizeof(DrawElementsIndirectCommand), nullptr, GL_DYNAMIC_STORAGE_BIT);
 
     glEnable(GL_DEPTH_TEST);
 
@@ -171,9 +185,7 @@ FateRenderer::~FateRenderer() {
     ImGui::DestroyContext();
 }
 
-// todo should we generate all these in the engine instead of the renderer?
-
-void FateRenderer::render(const Scene&scene) const {
+void FateRenderer::render(const Scene&scene) {
     glfwPollEvents();
 
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
@@ -184,7 +196,7 @@ void FateRenderer::render(const Scene&scene) const {
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
 
-    glClearColor(0.1f, 0.1f, 0.12f, 1.0f);
+    glClearColor(0.12f, 0.12f, 0.12f, 1.0f);
     glClearDepth(1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -192,8 +204,6 @@ void FateRenderer::render(const Scene&scene) const {
     int winHeight;
     glfwGetFramebufferSize(window, &winWidth, &winHeight);
     const float winAspect = static_cast<float>(winWidth) / winHeight;
-
-    const auto time = static_cast<float>(glfwGetTime());
 
     constexpr float camHorFovDegs = 60.0f;
     const float fovYRads = 2.0f * glm::atan(glm::tan(glm::radians(camHorFovDegs) * 0.5f) / winAspect);
@@ -203,17 +213,46 @@ void FateRenderer::render(const Scene&scene) const {
     const glm::mat4 proj = glm::perspective(fovYRads, winAspect, 0.01f, 100.0f);
     const glm::mat4 view = glm::translate(glm::mat4(1.0f), cameraPosition);
 
-    for (const auto object: scene.getObjects()) {
-        auto transform = object->getTransform();
-        glm::mat4 mvp = proj * view * glm::mat4(transform.getWorldMatrix());
+    indirectBuffer.clear();
 
-        glProgramUniformMatrix4fv(shaderProgram, 0, 1, GL_FALSE, glm::value_ptr(mvp));
+    const auto objects = scene.getObjects();
+    for (std::size_t i = 0; i < objects.size(); ++i) {
+        const auto object = objects[i];
 
-        glUseProgram(shaderProgram);
-        glBindVertexArray(vao);
+        // todo this can obviously be cached
+        indirectBuffer.emplace_back(DrawElementsIndirectCommand{
+            .count = 3,
+            .instanceCount = 1,
+            .firstIndex = object->getMeshHandle()->getFirstIndex(),
+            .baseVertex = object->getMeshHandle()->getBaseVertex(),
+            .baseInstance = 0
+        });
 
-        glDrawArrays(GL_TRIANGLES, object->getMeshHandle()->getBaseVertex(), 3);
+        glNamedBufferSubData(
+            transformBufferSsbo,
+            i * sizeof(glm::mat4),
+            sizeof(glm::mat4),
+            glm::value_ptr(glm::mat4(object->getTransform().getWorldMatrix()))
+        );
     }
+
+    glNamedBufferSubData(dib, 0, indirectBuffer.size() * sizeof(DrawElementsIndirectCommand), indirectBuffer.data());
+
+    glm::mat4 vp = proj * view;
+    glProgramUniformMatrix4fv(shaderProgram, 0, 1, GL_FALSE, glm::value_ptr(vp));
+
+    glUseProgram(shaderProgram);
+    glBindVertexArray(vao);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, transformBufferSsbo);
+    glBindBuffer(GL_DRAW_INDIRECT_BUFFER, dib);
+
+    glMultiDrawElementsIndirect(
+        GL_TRIANGLES,
+        GL_UNSIGNED_INT,
+        nullptr,
+        indirectBuffer.size(),
+        0
+    );
 
     // editor ui
     if (ImGui::BeginMainMenuBar()) {
