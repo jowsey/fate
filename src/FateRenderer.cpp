@@ -220,11 +220,13 @@ void FateRenderer::render(const Scene& scene) {
     glfwGetFramebufferSize(window, &winWidth, &winHeight);
     const float winAspect = static_cast<float>(winWidth) / winHeight;
 
+    glViewport(0, 0, winWidth, winHeight);
+
     constexpr float camHorFovDegs = 60.0f;
     const float fovYRads = 2.0f * glm::atan(glm::tan(glm::radians(camHorFovDegs) * 0.5f) / winAspect);
     const glm::mat4 proj = glm::perspective(fovYRads, winAspect, 0.01f, 100.0f);
 
-    const glm::mat4 view = glm::inverse(glm::translate(glm::mat4(1.0f), glm::vec3(cameraPosition)) * glm::mat4_cast(glm::quat(cameraRotation)));
+    const glm::mat4 view = glm::inverse(glm::translate(glm::mat4(1.0f), glm::vec3(cameraPosition)) * glm::mat4_cast(glm::quat(glm::radians(cameraRotation))));
 
     indirectBuffer.clear();
     std::vector<glm::mat4> meshTransforms{};

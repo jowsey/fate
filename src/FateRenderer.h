@@ -44,8 +44,8 @@ class FateRenderer {
     std::size_t vboOffset{0};
     std::size_t eboOffset{0};
 
-    glm::dvec3 cameraPosition{0, 0.5f, 5.0f};
-    glm::vec3 cameraRotation{0};
+    glm::dvec3 cameraPosition{2.25f, 1.0f, 5.0f};
+    glm::vec3 cameraRotation{0, 35.0f, 0};
 
 public:
     FateRenderer();
