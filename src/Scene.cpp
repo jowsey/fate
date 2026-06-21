@@ -16,6 +16,6 @@ void Scene::addObject(SceneObject& object) {
     objects.push_back(&object);
 
     for (const auto child: object.getTransform().getChildren()) {
-        addObject(*child->getObject());
+        addObject(child->getObject());
     }
 }

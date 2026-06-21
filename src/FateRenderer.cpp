@@ -191,7 +191,7 @@ FateRenderer::~FateRenderer() {
 }
 
 void DrawSceneHierarchyNode(SceneTransform& transform) {
-    if (ImGui::TreeNode(transform.getObject()->getName().c_str())) {
+    if (ImGui::TreeNode(transform.getObject().getName().c_str())) {
         auto position = transform.getPosition();
 
         if (ImGui::DragScalarN("Position", ImGuiDataType_Double, &position, 3, 0.01f)) {

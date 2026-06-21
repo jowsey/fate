@@ -35,8 +35,8 @@ public:
 
     [[nodiscard]] const glm::dmat4& getWorldMatrix();
 
-    [[nodiscard]] SceneObject* getObject() const { return object; }
     [[nodiscard]] SceneTransform* getParent() const { return parent; }
+    [[nodiscard]] SceneObject& getObject() const { return *object; }
     [[nodiscard]] const std::vector<SceneTransform *>& getChildren() const { return children; }
 
     void setPosition(const glm::dvec3& pos);
