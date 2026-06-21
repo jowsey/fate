@@ -99,7 +99,7 @@ SceneObject* FateEngine::buildNodeSceneObject(const aiNode* node, const aiScene*
 
         auto objectMesh = std::make_shared<Mesh>(processMesh(nodeMesh, scene));
         // todo renderer should handle this as required, engine shouldn't know about GPU handles
-        objectMesh->setGPUHandle(renderer.uploadMesh(objectMesh->getVertices(), objectMesh->getIndices()));
+        objectMesh->setGPUHandle(renderer.uploadMesh(*objectMesh));
 
         sceneObject->addMesh(std::move(objectMesh));
     }

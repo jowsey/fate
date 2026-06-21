@@ -352,9 +352,9 @@ void FateRenderer::endRender() const {
     glfwSwapBuffers(window);
 }
 
-GPUMeshHandle FateRenderer::uploadMesh(const std::vector<Vertex>& vertices, const std::vector<std::uint32_t>& indices) {
-    const auto vboBytesNeeded = vertices.size() * sizeof(Vertex);
-    const auto eboBytesNeeded = indices.size() * sizeof(std::uint32_t);
+GPUMeshHandle FateRenderer::uploadMesh(const Mesh& mesh) {
+    const auto vboBytesNeeded = mesh.getVertices().size() * sizeof(Vertex);
+    const auto eboBytesNeeded = mesh.getIndices().size() * sizeof(std::uint32_t);
 
     // todo store all active allocations and look for cleared spots, then in worst case, make a new pool and batch per-pool
     if (vboOffset + vboBytesNeeded > DefaultBufferSize) {
@@ -365,10 +365,10 @@ GPUMeshHandle FateRenderer::uploadMesh(const std::vector<Vertex>& vertices, cons
         throw std::runtime_error("EBO buffer overflow, see todo");
     }
 
-    std::println("Uploading mesh with {} vertices ({}) and {} indices ({})", vertices.size(), prettyBytes(vboBytesNeeded), indices.size(), prettyBytes(eboBytesNeeded));
+    std::println("Uploading mesh with {} vertices ({}) and {} indices ({})", mesh.getVertices().size(), prettyBytes(vboBytesNeeded), mesh.getIndices().size(), prettyBytes(eboBytesNeeded));
 
-    glNamedBufferSubData(vbo, vboOffset, vertices.size() * sizeof(Vertex), vertices.data());
-    glNamedBufferSubData(ebo, eboOffset, indices.size() * sizeof(std::uint32_t), indices.data());
+    glNamedBufferSubData(vbo, vboOffset, mesh.getVertices().size() * sizeof(Vertex), mesh.getVertices().data());
+    glNamedBufferSubData(ebo, eboOffset, mesh.getIndices().size() * sizeof(std::uint32_t), mesh.getIndices().data());
 
     const std::size_t vboStoredIndex = vboOffset;
     const std::size_t eboStoredIndex = eboOffset;

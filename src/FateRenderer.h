@@ -60,5 +60,5 @@ public:
 
     [[nodiscard]] GLFWwindow* getWindow() const { return window; }
 
-    GPUMeshHandle uploadMesh(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices);
+    GPUMeshHandle uploadMesh(const Mesh& mesh);
 };
