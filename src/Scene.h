@@ -11,7 +11,7 @@ public:
 
     [[nodiscard]] const std::string& getName() const { return name; }
 
-    void addObject(SceneObject&object);
+    void addObject(SceneObject& object);
 
     [[nodiscard]] const std::vector<SceneObject *>& getObjects() const { return objects; }
 };

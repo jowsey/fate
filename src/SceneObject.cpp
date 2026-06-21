@@ -2,6 +2,10 @@
 
 #include <utility>
 
-SceneObject::SceneObject(std::string name, std::shared_ptr<Mesh> mesh, std::shared_ptr<MeshHandle> meshHandle)
-    : name(std::move(name)), transform(*this), mesh(std::move(mesh)), meshHandle(std::move(meshHandle)) {
+SceneObject::SceneObject(std::string name)
+    : name(std::move(name)), transform(*this) {
+}
+
+void SceneObject::addMesh(std::shared_ptr<Mesh> mesh) {
+    meshes.push_back(std::move(mesh));
 }

@@ -7,7 +7,7 @@
 #include <filesystem>
 #include <vector>
 
-#include "MeshHandle.h"
+#include "GPUMeshHandle.h"
 #include "Scene.h"
 #include "Vertex.h"
 
@@ -28,7 +28,7 @@ class FateRenderer {
 
     static GLuint compileShader(GLuint type, std::string_view source);
 
-    static GLuint loadShader(GLuint type, const std::filesystem::path&path);
+    static GLuint loadShader(GLuint type, const std::filesystem::path& path);
 
     GLFWwindow* window;
 
@@ -37,21 +37,28 @@ class FateRenderer {
     GLuint ebo{};
     GLuint vao{};
     GLuint dib{};
-    GLuint transformBufferSsbo{};
+    GLuint transformBufferSSBO{};
 
     std::vector<DrawElementsIndirectCommand> indirectBuffer{};
 
     std::size_t vboOffset{0};
     std::size_t eboOffset{0};
 
+    glm::dvec3 cameraPosition{0, 0.5f, 5.0f};
+    glm::vec3 cameraRotation{0};
+
 public:
     FateRenderer();
 
     ~FateRenderer();
 
-    void render(const Scene&scene);
+    void render(const Scene& scene);
+
+    void drawEditorUI(const Scene& scene);
+
+    void endRender() const;
 
     [[nodiscard]] GLFWwindow* getWindow() const { return window; }
 
-    MeshHandle uploadMesh(const std::vector<Vertex>&vertices, const std::vector<unsigned int>&indices);
+    GPUMeshHandle uploadMesh(const std::vector<Vertex>& vertices, const std::vector<unsigned int>& indices);
 };

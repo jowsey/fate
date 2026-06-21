@@ -27,7 +27,7 @@ class SceneTransform {
     void setDirty();
 
 public:
-    explicit SceneTransform(SceneObject&object);
+    explicit SceneTransform(SceneObject& object);
 
     [[nodiscard]] const glm::dvec3& getPosition() const { return localPosition; }
     [[nodiscard]] const glm::quat& getRotation() const { return localRotation; }
@@ -39,11 +39,11 @@ public:
     [[nodiscard]] SceneTransform* getParent() const { return parent; }
     [[nodiscard]] const std::vector<SceneTransform *>& getChildren() const { return children; }
 
-    void setPosition(const glm::dvec3&pos);
+    void setPosition(const glm::dvec3& pos);
 
-    void setRotation(const glm::quat&rot);
+    void setRotation(const glm::quat& rot);
 
-    void setLocalScale(const glm::vec3&scale);
+    void setLocalScale(const glm::vec3& scale);
 
-    void setParent(SceneTransform&newParent);
+    void setParent(SceneTransform& newParent);
 };

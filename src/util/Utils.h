@@ -4,6 +4,8 @@
 
 std::filesystem::path getExecutablePath();
 
-void openBrowser(const std::string&url);
+std::filesystem::path getEnginePath();
+
+void openBrowser(const std::string& url);
 
 std::string prettyBytes(std::size_t bytes);

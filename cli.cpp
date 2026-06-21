@@ -35,8 +35,7 @@ int main(const int argc, char** argv) {
             std::filesystem::create_directories(absolutePath);
         }
 
-        std::filesystem::path engineDir = getExecutablePath().parent_path().parent_path();
-        std::filesystem::copy(engineDir / "resources/ProjectTemplates/Default", absolutePath, std::filesystem::copy_options::recursive);
+        std::filesystem::copy(getEnginePath() / "resources/ProjectTemplates/Default", absolutePath, std::filesystem::copy_options::recursive);
 
         // Replace placeholder tags
         const std::array<std::pair<std::string, std::string>, 1> TagReplacements = {

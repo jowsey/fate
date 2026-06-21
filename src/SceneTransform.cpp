@@ -26,10 +26,10 @@ void SceneTransform::setDirty() {
     isDirty = true;
 }
 
-SceneTransform::SceneTransform(SceneObject&object) : object(&object) {
+SceneTransform::SceneTransform(SceneObject& object) : object(&object) {
 }
 
-void SceneTransform::setParent(SceneTransform&newParent) {
+void SceneTransform::setParent(SceneTransform& newParent) {
     if (parent) {
         const auto childIt = std::ranges::find(parent->children, this);
         parent->children.erase(childIt);
@@ -49,17 +49,17 @@ const glm::dmat4& SceneTransform::getWorldMatrix() {
     return worldMatrix;
 }
 
-void SceneTransform::setPosition(const glm::dvec3&pos) {
+void SceneTransform::setPosition(const glm::dvec3& pos) {
     this->localPosition = pos;
     isDirty = true;
 }
 
-void SceneTransform::setRotation(const glm::quat&rot) {
+void SceneTransform::setRotation(const glm::quat& rot) {
     this->localRotation = rot;
     isDirty = true;
 }
 
-void SceneTransform::setLocalScale(const glm::vec3&scale) {
+void SceneTransform::setLocalScale(const glm::vec3& scale) {
     this->localScale = scale;
     isDirty = true;
 }

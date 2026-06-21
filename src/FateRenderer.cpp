@@ -10,6 +10,7 @@
 
 #include "glm/glm.hpp"
 #include "glm/gtc/matrix_transform.hpp"
+#include "glm/gtc/quaternion.hpp"
 #include "glm/gtc/type_ptr.inl"
 
 #include "imgui.h"
@@ -17,6 +18,7 @@
 #include "imgui_impl_opengl3.h"
 #include "Scene.h"
 
+#include "GPUMeshHandle.h"
 #include "util/Utils.h"
 
 void APIENTRY glDebugOutput(GLenum source, GLenum type, unsigned int id, GLenum severity, GLsizei length, const char* message, const void* userParam) {
@@ -44,7 +46,7 @@ GLuint FateRenderer::compileShader(const GLuint type, const std::string_view sou
     return shader;
 }
 
-GLuint FateRenderer::loadShader(const GLuint type, const std::filesystem::path&path) {
+GLuint FateRenderer::loadShader(const GLuint type, const std::filesystem::path& path) {
     std::ifstream file(path);
     if (!file.is_open()) {
         throw std::runtime_error("failed to open shader file: " + path.string());
@@ -88,7 +90,7 @@ FateRenderer::FateRenderer() {
     }
 
     // shaders
-    const auto shaderPath = getExecutablePath().parent_path().parent_path() / "resources/Shaders";
+    const auto shaderPath = getEnginePath() / "resources/Shaders";
     const GLuint vertexShader = loadShader(GL_VERTEX_SHADER, shaderPath / "lit.vert");
     const GLuint fragmentShader = loadShader(GL_FRAGMENT_SHADER, shaderPath / "lit.frag");
 
@@ -125,8 +127,8 @@ FateRenderer::FateRenderer() {
     glVertexArrayAttribBinding(vao, 1, 0);
 
     // transformbuffer ssbo
-    glCreateBuffers(1, &transformBufferSsbo);
-    glNamedBufferStorage(transformBufferSsbo, 128 * sizeof(glm::mat4), nullptr, GL_DYNAMIC_STORAGE_BIT);
+    glCreateBuffers(1, &transformBufferSSBO);
+    glNamedBufferStorage(transformBufferSSBO, 128 * sizeof(glm::mat4), nullptr, GL_DYNAMIC_STORAGE_BIT);
 
     // draw indirect buffer
     glCreateBuffers(1, &dib);
@@ -138,7 +140,7 @@ FateRenderer::FateRenderer() {
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
 
-    ImGuiIO&io = ImGui::GetIO();
+    ImGuiIO& io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
@@ -148,7 +150,7 @@ FateRenderer::FateRenderer() {
     constexpr auto bgDark = ImColor(26, 26, 26);
     constexpr auto border = ImColor(64, 64, 64);
 
-    ImGuiStyle&style = ImGui::GetStyle();
+    ImGuiStyle& style = ImGui::GetStyle();
     style.FontSizeBase = 16.0f;
 
     style.WindowRounding = 4.0f;
@@ -185,13 +187,23 @@ FateRenderer::~FateRenderer() {
     ImGui::DestroyContext();
 }
 
-void FateRenderer::render(const Scene&scene) {
-    glfwPollEvents();
+void DrawSceneHierarchyNode(SceneTransform& transform) {
+    if (ImGui::TreeNode(transform.getObject()->getName().c_str())) {
+        auto position = transform.getPosition();
 
-    if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
-        glfwSetWindowShouldClose(window, true);
+        if (ImGui::DragScalarN("Position", ImGuiDataType_Double, &position, 3, 0.01f)) {
+            transform.setPosition(position);
+        }
+
+        for (SceneTransform* childTransform: transform.getChildren()) {
+            DrawSceneHierarchyNode(*childTransform);
+        }
+
+        ImGui::TreePop();
     }
+}
 
+void FateRenderer::render(const Scene& scene) {
     ImGui_ImplOpenGL3_NewFrame();
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
@@ -209,41 +221,43 @@ void FateRenderer::render(const Scene&scene) {
     const float fovYRads = 2.0f * glm::atan(glm::tan(glm::radians(camHorFovDegs) * 0.5f) / winAspect);
     const glm::mat4 proj = glm::perspective(fovYRads, winAspect, 0.01f, 100.0f);
 
-    constexpr glm::vec3 cameraPosition = glm::vec3(0.0f, 0.0f, 2.5f);
-    constexpr glm::mat4 view = glm::translate(glm::mat4(1.0f), -cameraPosition);
+    const glm::mat4 view = glm::inverse(glm::translate(glm::mat4(1.0f), glm::vec3(cameraPosition)) * glm::mat4_cast(glm::quat(cameraRotation)));
 
     indirectBuffer.clear();
+    std::vector<glm::mat4> meshTransforms{};
 
-    const auto objects = scene.getObjects();
+    const auto& objects = scene.getObjects();
+
     for (std::size_t i = 0; i < objects.size(); ++i) {
         const auto object = objects[i];
+        const auto& meshes = object->getMeshes();
 
-        // todo this can obviously be cached
-        indirectBuffer.emplace_back(DrawElementsIndirectCommand{
-            .count = static_cast<GLuint>(object->getMesh()->getIndices().size()),
-            .instanceCount = 1,
-            .firstIndex = object->getMeshHandle()->getFirstIndex(),
-            .baseVertex = object->getMeshHandle()->getBaseVertex(),
-            .baseInstance = 0
-        });
+        for (const auto& mesh: meshes) {
+            // todo almost certainly doesn't need to be rebuilt from scratch every frame
+            indirectBuffer.emplace_back(DrawElementsIndirectCommand{
+                .count = static_cast<GLuint>(mesh->getIndices().size()),
+                .instanceCount = 1,
+                .firstIndex = mesh->getGPUHandle()->getEboOffset(),
+                .baseVertex = mesh->getGPUHandle()->getVboOffset(),
+                .baseInstance = 0
+            });
 
-        glNamedBufferSubData(
-            transformBufferSsbo,
-            i * sizeof(glm::mat4),
-            sizeof(glm::mat4),
-            glm::value_ptr(glm::mat4(object->getTransform().getWorldMatrix()))
-        );
+            meshTransforms.push_back(glm::mat4(object->getTransform().getWorldMatrix()));
+        }
     }
 
     glNamedBufferSubData(dib, 0, indirectBuffer.size() * sizeof(DrawElementsIndirectCommand), indirectBuffer.data());
+    glNamedBufferSubData(transformBufferSSBO, 0, meshTransforms.size() * sizeof(glm::mat4), meshTransforms.data());
 
     glm::mat4 vp = proj * view;
     glProgramUniformMatrix4fv(shaderProgram, 0, 1, GL_FALSE, glm::value_ptr(vp));
 
     glUseProgram(shaderProgram);
     glBindVertexArray(vao);
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, transformBufferSsbo);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, transformBufferSSBO);
     glBindBuffer(GL_DRAW_INDIRECT_BUFFER, dib);
+
+    if (indirectBuffer.empty()) return;
 
     glMultiDrawElementsIndirect(
         GL_TRIANGLES,
@@ -252,8 +266,9 @@ void FateRenderer::render(const Scene&scene) {
         indirectBuffer.size(),
         0
     );
+}
 
-    // editor ui
+void FateRenderer::drawEditorUI(const Scene& scene) {
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("File")) {
             if (ImGui::MenuItem("Exit")) {
@@ -283,27 +298,41 @@ void FateRenderer::render(const Scene&scene) {
 
     ImGui::Begin("fate");
 
-    ImGui::ProgressBar(
-        static_cast<float>(vboOffset) / DefaultBufferSize,
-        ImVec2(-1.0f, 0.0f),
-        std::format("VBO usage: {} ({:.5f}%)", prettyBytes(vboOffset), static_cast<float>(vboOffset) / DefaultBufferSize * 100.0f).c_str()
-    );
+    ImGui::DragScalarN("Camera position", ImGuiDataType_Double, &cameraPosition, 3, 0.01f);
+    ImGui::DragFloat3("Camera rotation", &cameraRotation.x, 0.01f);
 
-    ImGui::ProgressBar(
-        static_cast<float>(eboOffset) / DefaultBufferSize,
-        ImVec2(-1.0f, 0.0f),
-        std::format("EBO usage: {} ({:.5f}%)", prettyBytes(eboOffset), static_cast<float>(eboOffset) / DefaultBufferSize * 100.0f).c_str()
-    );
+    if (ImGui::CollapsingHeader("Hierarchy", nullptr, ImGuiTreeNodeFlags_DefaultOpen)) {
+        for (SceneObject* object: scene.getObjects()) {
+            if (object->getTransform().getParent() != nullptr) continue;
+            DrawSceneHierarchyNode(object->getTransform());
+        }
+    }
+
+    if (ImGui::CollapsingHeader("Resource usage", nullptr, ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::ProgressBar(
+            static_cast<float>(vboOffset) / DefaultBufferSize,
+            ImVec2(-1.0f, 0.0f),
+            std::format("VBO usage: {} ({:.5f}%)", prettyBytes(vboOffset), static_cast<float>(vboOffset) / DefaultBufferSize * 100.0f).c_str()
+        );
+
+        ImGui::ProgressBar(
+            static_cast<float>(eboOffset) / DefaultBufferSize,
+            ImVec2(-1.0f, 0.0f),
+            std::format("EBO usage: {} ({:.5f}%)", prettyBytes(eboOffset), static_cast<float>(eboOffset) / DefaultBufferSize * 100.0f).c_str()
+        );
+    }
 
     ImGui::End();
 
     ImGui::Render();
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+}
 
+void FateRenderer::endRender() const {
     glfwSwapBuffers(window);
 }
 
-MeshHandle FateRenderer::uploadMesh(const std::vector<Vertex>&vertices, const std::vector<std::uint32_t>&indices) {
+GPUMeshHandle FateRenderer::uploadMesh(const std::vector<Vertex>& vertices, const std::vector<std::uint32_t>& indices) {
     const auto vboBytesNeeded = vertices.size() * sizeof(Vertex);
     const auto eboBytesNeeded = indices.size() * sizeof(std::uint32_t);
 
@@ -327,5 +356,5 @@ MeshHandle FateRenderer::uploadMesh(const std::vector<Vertex>&vertices, const st
     vboOffset += vboBytesNeeded;
     eboOffset += eboBytesNeeded;
 
-    return MeshHandle(vboStoredIndex / sizeof(Vertex), eboStoredIndex / sizeof(std::uint32_t));
+    return GPUMeshHandle(vboStoredIndex / sizeof(Vertex), eboStoredIndex / sizeof(std::uint32_t));
 }

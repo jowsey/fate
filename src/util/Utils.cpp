@@ -4,6 +4,7 @@
 #include <string>
 
 #if defined(_WIN32)
+#define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #elif defined(__linux__)
 #include <unistd.h>
@@ -34,7 +35,11 @@ std::filesystem::path getExecutablePath() {
 #endif
 }
 
-void openBrowser(const std::string&url) {
+std::filesystem::path getEnginePath() {
+    return getExecutablePath().parent_path().parent_path();
+}
+
+void openBrowser(const std::string& url) {
     std::string command;
 
 #if defined(_WIN32)
@@ -50,7 +55,7 @@ void openBrowser(const std::string&url) {
 
 std::string prettyBytes(const std::size_t bytes) {
     constexpr std::array<std::string_view, 5> units = {"B", "KB", "MB", "GB", "TB"};
-    double size = static_cast<double>(bytes);
+    auto size = static_cast<double>(bytes);
     std::size_t unitIndex = 0;
 
     while (size >= 1000 && unitIndex < units.size() - 1) {

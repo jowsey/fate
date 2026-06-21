@@ -2,24 +2,22 @@
 #include <string>
 
 #include "Mesh.h"
-#include "MeshHandle.h"
 #include "SceneTransform.h"
 
 class SceneObject {
     std::string name;
     SceneTransform transform;
 
-    std::shared_ptr<Mesh> mesh;
-    std::shared_ptr<MeshHandle> meshHandle; // todo combine?
+    std::vector<std::shared_ptr<Mesh>> meshes{};
 
 public:
-    explicit SceneObject(std::string name, std::shared_ptr<Mesh> mesh, std::shared_ptr<MeshHandle> meshHandle);
+    explicit SceneObject(std::string name);
 
     [[nodiscard]] const std::string& getName() const { return name; }
 
     [[nodiscard]] SceneTransform& getTransform() { return transform; }
 
-    [[nodiscard]] const std::shared_ptr<Mesh>& getMesh() const { return mesh; }
+    [[nodiscard]] const std::vector<std::shared_ptr<Mesh>>& getMeshes() const { return meshes; }
 
-    [[nodiscard]] const std::shared_ptr<MeshHandle>& getMeshHandle() const { return meshHandle; }
+    void addMesh(std::shared_ptr<Mesh> mesh);
 };
