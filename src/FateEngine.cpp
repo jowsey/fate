@@ -13,8 +13,12 @@ void FateEngine::run() {
     while (!glfwWindowShouldClose(renderer.getWindow())) {
         glfwPollEvents();
 
+        const double currentTime = glfwGetTime();
+        const double deltaTime = currentTime - lastTime;
+        lastTime = currentTime;
+
         renderer.render(*activeScene);
-        renderer.drawEditorUI(*activeScene);
+        renderer.drawEditorUI(*activeScene, deltaTime);
         renderer.endRender();
     }
 }

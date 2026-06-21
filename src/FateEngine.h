@@ -12,8 +12,8 @@ class FateEngine {
 
     SceneObject* buildNodeSceneObject(const aiNode* node, const aiScene* scene);
 
-    glm::dvec3 cameraPosition{0};
-    glm::quat cameraRotation{1, 0, 0, 0};
+    double lastTime{0};
+    double deltaTime{0};
 
 public:
     void run();

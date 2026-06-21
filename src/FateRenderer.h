@@ -54,7 +54,7 @@ public:
 
     void render(const Scene& scene);
 
-    void drawEditorUI(const Scene& scene);
+    void drawEditorUI(const Scene& scene, double deltaTime);
 
     void endRender() const;
 

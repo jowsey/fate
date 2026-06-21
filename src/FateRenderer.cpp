@@ -3,8 +3,10 @@
 
 #include "FateRenderer.h"
 
+#include <deque>
 #include <fstream>
 #include <iostream>
+#include <numeric>
 #include <sstream>
 #include <vector>
 
@@ -74,6 +76,7 @@ FateRenderer::FateRenderer() {
     }
 
     glfwMakeContextCurrent(window);
+    glfwSwapInterval(1);
 
     if (!gladLoadGLLoader(reinterpret_cast<GLADloadproc>(glfwGetProcAddress))) {
         throw std::runtime_error("failed to initialize GLAD");
@@ -268,7 +271,7 @@ void FateRenderer::render(const Scene& scene) {
     );
 }
 
-void FateRenderer::drawEditorUI(const Scene& scene) {
+void FateRenderer::drawEditorUI(const Scene& scene, const double deltaTime) {
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("File")) {
             if (ImGui::MenuItem("Exit")) {
@@ -290,6 +293,21 @@ void FateRenderer::drawEditorUI(const Scene& scene) {
 
             ImGui::EndMenu();
         }
+
+        static std::deque<double> deltaTimeBuffer{};
+        if (deltaTimeBuffer.size() >= 30) {
+            deltaTimeBuffer.pop_front();
+        }
+        deltaTimeBuffer.push_back(deltaTime);
+
+        const double averageDeltaTime = deltaTimeBuffer.empty()
+                                            ? 0.0
+                                            : std::accumulate(deltaTimeBuffer.begin(), deltaTimeBuffer.end(), 0.0) / deltaTimeBuffer.size();
+
+        const std::string fpsString = std::format("{:.3} fps", 1.0 / averageDeltaTime);
+        const float fpsSize = ImGui::CalcTextSize(fpsString.c_str()).x;
+        ImGui::SetCursorPosX(ImGui::GetWindowWidth() - fpsSize - 8.0f);
+        ImGui::TextUnformatted(fpsString.c_str());
 
         ImGui::EndMainMenuBar();
     }
