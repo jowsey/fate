@@ -130,6 +130,10 @@ FateRenderer::FateRenderer() {
     glVertexArrayAttribFormat(vao, 1, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float));
     glVertexArrayAttribBinding(vao, 1, 0);
 
+    glEnableVertexArrayAttrib(vao, 2);
+    glVertexArrayAttribFormat(vao, 2, 2, GL_FLOAT, GL_FALSE, 6 * sizeof(float));
+    glVertexArrayAttribBinding(vao, 2, 0);
+
     // transformbuffer ssbo
     glCreateBuffers(1, &transformBufferSSBO);
     glNamedBufferStorage(transformBufferSSBO, 128 * sizeof(glm::mat4), nullptr, GL_DYNAMIC_STORAGE_BIT);
