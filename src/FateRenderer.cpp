@@ -31,11 +31,17 @@ void APIENTRY glDebugOutput(GLenum source, GLenum type, unsigned int id, GLenum 
     std::println(stderr, "OpenGL debug message ({}): {}", id, message);
 }
 
-GLuint FateRenderer::compileShader(const GLuint type, const std::string_view source) {
-    const char* src = source.data();
+GLuint FateRenderer::loadShader(const GLuint type, const std::filesystem::path& path) {
+    std::ifstream file(path);
+    if (!file.is_open()) {
+        throw std::runtime_error("failed to open shader file: " + path.string());
+    }
+
+    const std::string source((std::istreambuf_iterator(file)), std::istreambuf_iterator<char>());
+    const char* sourceData = source.data();
 
     const GLuint shader = glCreateShader(type);
-    glShaderSource(shader, 1, &src, nullptr);
+    glShaderSource(shader, 1, &sourceData, nullptr);
     glCompileShader(shader);
 
     int success;
@@ -43,22 +49,10 @@ GLuint FateRenderer::compileShader(const GLuint type, const std::string_view sou
     if (!success) {
         std::array<char, 512> infoLog{};
         glGetShaderInfoLog(shader, infoLog.size(), nullptr, infoLog.data());
-        std::println(stderr, "Shader compilation failed: {}", infoLog.data());
+        std::println(stderr, "shader compilation failed for {}: {}", path.filename().string(), infoLog.data());
     }
 
     return shader;
-}
-
-GLuint FateRenderer::loadShader(const GLuint type, const std::filesystem::path& path) {
-    std::ifstream file(path);
-    if (!file.is_open()) {
-        throw std::runtime_error("failed to open shader file: " + path.string());
-    }
-
-    std::stringstream buffer;
-    buffer << file.rdbuf();
-
-    return compileShader(type, buffer.str());
 }
 
 FateRenderer::FateRenderer() {

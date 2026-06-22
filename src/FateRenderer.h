@@ -26,8 +26,6 @@ struct DrawElementsIndirectCommand {
 class FateRenderer {
     static constexpr int DefaultBufferSize = 1024 * 1024 * 64; // 64mb
 
-    static GLuint compileShader(GLuint type, std::string_view source);
-
     static GLuint loadShader(GLuint type, const std::filesystem::path& path);
 
     GLFWwindow* window;
