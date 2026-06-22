@@ -1,6 +1,5 @@
 #include <array>
 #include <filesystem>
-#include <format>
 #include <string>
 
 #if defined(_WIN32)

@@ -4,6 +4,8 @@
 #include <format>
 #include <memory>
 #include <print>
+#include <fstream>
+#include <vector>
 
 #define WUFFS_IMPLEMENTATION
 #define WUFFS_CONFIG__MODULES
@@ -13,9 +15,6 @@
 #define WUFFS_CONFIG__MODULE__DEFLATE
 #define WUFFS_CONFIG__MODULE__PNG
 #define WUFFS_CONFIG__MODULE__ZLIB
-#include <fstream>
-#include <vector>
-
 #include "wuffs-v0.3.c"
 
 namespace FileUtils {

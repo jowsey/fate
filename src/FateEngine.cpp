@@ -1,6 +1,7 @@
 #include "FateEngine.h"
 
 #include <print>
+#include <iostream>
 
 #include "Material.h"
 #include "Scene.h"
@@ -11,8 +12,6 @@
 #include "assimp/postprocess.h"
 #include "utils/Paths.h"
 #include "utils/Files.h"
-
-#include <iostream>
 
 void FateEngine::run() {
     while (!glfwWindowShouldClose(renderer.getWindow())) {

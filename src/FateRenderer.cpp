@@ -1,13 +1,11 @@
-#include <print>
-#include <cwchar>
-
 #include "FateRenderer.h"
 
+#include <print>
+#include <cwchar>
 #include <deque>
 #include <fstream>
 #include <iostream>
 #include <numeric>
-#include <sstream>
 #include <vector>
 
 #include "glm/glm.hpp"
@@ -18,10 +16,10 @@
 #include "imgui.h"
 #include "imgui_impl_glfw.h"
 #include "imgui_impl_opengl3.h"
-#include "Scene.h"
 
 #include "GPUMeshHandle.h"
 #include "TextureData.h"
+#include "Scene.h"
 #include "utils/Files.h"
 #include "utils/Paths.h"
 
@@ -145,13 +143,11 @@ FateRenderer::FateRenderer() {
 
     // default assets
     std::uint32_t missingTextureWidth, missingTextureHeight;
-
     auto missingTexture = FileUtils::loadPngFromFile(
         PathUtils::getEnginePath() / "resources/Textures/missing.png",
         missingTextureWidth,
         missingTextureHeight
     );
-
     missingTextureHandle = uploadTexture({missingTextureWidth, missingTextureHeight, missingTexture.get()}, GL_NEAREST, GL_NEAREST);
 
     // imgui
