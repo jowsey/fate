@@ -2,6 +2,8 @@
 #include <optional>
 #include <glad/glad.h>
 
+#include "glm/vec4.hpp"
+
 enum class MapFlags : std::uint32_t {
     None = 0,
     HasAlbedoMap = 1 << 0,
