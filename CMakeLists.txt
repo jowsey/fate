@@ -31,9 +31,32 @@ add_executable(fate
 
 target_compile_definitions(fate PRIVATE FATE_VERSION="${PROJECT_VERSION}")
 
-# Static linking for Windows MINGW
-if (WIN32 AND MINGW)
-    target_link_options(fate PRIVATE "-static-libgcc" "-static-libstdc++" "-static")
+# Static linking
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+target_link_options(fate PRIVATE "-static-libgcc" "-static-libstdc++" "-static")
+
+# Release build optimizations
+if (CMAKE_BUILD_TYPE STREQUAL "Release")
+    # general optimizations
+    target_compile_options(fate PRIVATE -mavx2 -ffast-math)
+
+    # dead code elimination
+    target_compile_options(fate PRIVATE -ffunction-sections -fdata-sections)
+    target_link_options(fate PRIVATE -Wl,--gc-sections)
+
+    # glm SIMD support
+    target_compile_definitions(fate PRIVATE
+            GLM_FORCE_INTRINSICS
+            GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
+    )
+
+    # link-time optimization
+    include(CheckIPOSupported)
+    check_ipo_supported(RESULT ipoSupported OUTPUT error)
+    if (ipoSupported)
+        message(STATUS "LTO enabled")
+        set_target_properties(fate PROPERTIES INTERPROCEDURAL_OPTIMIZATION TRUE)
+    endif ()
 endif ()
 
 # Build directory
@@ -127,7 +150,6 @@ set(ASSIMP_BUILD_ALL_EXPORTERS_BY_DEFAULT OFF CACHE BOOL "" FORCE)
 
 set(ASSIMP_BUILD_GLTF_IMPORTER ON CACHE BOOL "" FORCE)
 
-set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(ASSIMP_BUILD_ASSIMP_TOOLS OFF CACHE BOOL "" FORCE)
 set(ASSIMP_INSTALL OFF CACHE BOOL "" FORCE)
