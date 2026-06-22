@@ -115,17 +115,25 @@ FateRenderer::FateRenderer() {
     glVertexArrayVertexBuffer(vao, 0, vbo, 0, sizeof(Vertex));
     glVertexArrayElementBuffer(vao, ebo);
 
+    // baseColour
     glEnableVertexArrayAttrib(vao, 0);
-    glVertexArrayAttribFormat(vao, 0, 3, GL_FLOAT, GL_FALSE, 0);
+    glVertexArrayAttribFormat(vao, 0, 4, GL_FLOAT, GL_FALSE, 0 * sizeof(float));
     glVertexArrayAttribBinding(vao, 0, 0);
 
+    // position
     glEnableVertexArrayAttrib(vao, 1);
-    glVertexArrayAttribFormat(vao, 1, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float));
+    glVertexArrayAttribFormat(vao, 1, 3, GL_FLOAT, GL_FALSE, 4 * sizeof(float));
     glVertexArrayAttribBinding(vao, 1, 0);
 
+    // normal
     glEnableVertexArrayAttrib(vao, 2);
-    glVertexArrayAttribFormat(vao, 2, 2, GL_FLOAT, GL_FALSE, 6 * sizeof(float));
+    glVertexArrayAttribFormat(vao, 2, 3, GL_FLOAT, GL_FALSE, 7 * sizeof(float));
     glVertexArrayAttribBinding(vao, 2, 0);
+
+    // texCoord
+    glEnableVertexArrayAttrib(vao, 3);
+    glVertexArrayAttribFormat(vao, 3, 2, GL_FLOAT, GL_FALSE, 10 * sizeof(float));
+    glVertexArrayAttribBinding(vao, 3, 0);
 
     // TransformBuffer SSBO
     glCreateBuffers(1, &transformBufferSSBO);
@@ -138,8 +146,6 @@ FateRenderer::FateRenderer() {
     // draw indirect buffer
     glCreateBuffers(1, &dib);
     glNamedBufferStorage(dib, 128 * sizeof(DrawElementsIndirectCommand), nullptr, GL_DYNAMIC_STORAGE_BIT);
-
-    glEnable(GL_DEPTH_TEST);
 
     // default assets
     std::uint32_t missingTextureWidth, missingTextureHeight;
@@ -255,6 +261,7 @@ void FateRenderer::render(const Scene& scene) {
 
     glClearColor(0.12f, 0.12f, 0.12f, 1.0f);
     glClearDepth(1.0f);
+    glDepthMask(GL_TRUE);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     int winWidth;
@@ -262,6 +269,7 @@ void FateRenderer::render(const Scene& scene) {
     glfwGetFramebufferSize(window, &winWidth, &winHeight);
     const float winAspect = static_cast<float>(winWidth) / winHeight;
 
+    // todo should probably only do this on glfw resize
     glViewport(0, 0, winWidth, winHeight);
 
     constexpr float camHorFovDegs = 60.0f;
@@ -270,42 +278,87 @@ void FateRenderer::render(const Scene& scene) {
 
     const glm::mat4 view = glm::inverse(glm::translate(glm::mat4(1.0f), glm::vec3(cameraPosition)) * glm::mat4_cast(glm::quat(glm::radians(cameraRotation))));
 
-    indirectBuffer.clear();
-    modelMatrices.clear();
-    materials.clear();
+    std::vector<RenderItem> renderItems; // todo cache + reserve, maybe store total meshes
 
     const auto& objects = scene.getObjects();
 
-    for (std::size_t i = 0; i < objects.size(); ++i) {
-        const auto object = objects[i];
+    // todo we need to migrate to camera-relative positions at some point
+    const auto camPos = glm::vec3(cameraPosition);
+
+    for (const auto object: objects) {
         const auto& meshes = object->getMeshes();
 
-        for (std::size_t j = 0; j < meshes.size(); ++j) {
-            const auto& mesh = meshes[j];
-
+        for (const auto& mesh: meshes) {
             // todo almost certainly doesn't need to be rebuilt from scratch every frame
-            indirectBuffer.emplace_back(DrawElementsIndirectCommand{
+            const auto command = DrawElementsIndirectCommand{
                 .count = static_cast<GLuint>(mesh->getIndices().size()),
                 .instanceCount = 1,
                 .firstIndex = mesh->getGPUHandle()->getEboOffset(),
                 .baseVertex = mesh->getGPUHandle()->getVboOffset(),
                 .baseInstance = 0
-            });
+            };
 
-            modelMatrices.push_back(glm::mat4(object->getTransform().getWorldMatrix()));
+            const auto modelMatrix = object->getTransform().getWorldMatrix();
+            const auto meshPosition = glm::vec3(modelMatrix[3]);
 
-            const auto material = mesh->getMaterial();
+            const auto meshMaterial = mesh->getMaterial();
+            const auto materialData = MaterialData{
+                .baseColour = meshMaterial->baseColour,
+                .albedoMapHandle = meshMaterial->albedoMapHandle.value_or(missingTextureHandle),
+                .mapFlags = meshMaterial->mapFlags,
+                .metallic = meshMaterial->metallic,
+                .roughness = meshMaterial->roughness
+            };
 
-            materials.push_back(MaterialData{
-                .albedoMapHandle = material->albedoMapHandle.value_or(missingTextureHandle),
-                .metallic = material->metallic,
-                .roughness = material->roughness
+            renderItems.push_back(RenderItem{
+                .command = command,
+                .modelMatrix = modelMatrix,
+                .material = materialData,
+                .distance = glm::length(meshPosition - camPos),
+                .isTransparent = meshMaterial->useAlpha
             });
         }
     }
 
+    std::ranges::sort(renderItems, [](const RenderItem& a, const RenderItem& b) {
+        if (a.isTransparent != b.isTransparent) {
+            return !a.isTransparent; // all opaque first
+        }
+
+        // opaque is closest-first, transparent is farthest-first
+        return !a.isTransparent
+                   ? a.distance < b.distance
+                   : a.distance > b.distance;
+    });
+
+    indirectBuffer.clear();
+    modelMatrices.clear();
+    materials.clear();
+    indirectBuffer.reserve(renderItems.size());
+    modelMatrices.reserve(renderItems.size());
+    materials.reserve(renderItems.size());
+
+    std::uint32_t ssboIndex = 0;
+    std::uint32_t opaqueCount = 0;
+    std::uint32_t transparentCount = 0;
+
+    for (auto& item: renderItems) {
+        item.command.baseInstance = ssboIndex++;
+
+        modelMatrices.push_back(item.modelMatrix);
+        materials.push_back(item.material);
+
+        indirectBuffer.push_back(item.command);
+
+        if (item.isTransparent) {
+            transparentCount++;
+        }
+        else {
+            opaqueCount++;
+        }
+    }
+
     // todo we also definitely don't need to be resending everything every frame
-    glNamedBufferSubData(dib, 0, indirectBuffer.size() * sizeof(DrawElementsIndirectCommand), indirectBuffer.data());
     glNamedBufferSubData(transformBufferSSBO, 0, modelMatrices.size() * sizeof(glm::mat4), modelMatrices.data());
     glNamedBufferSubData(materialBufferSSBO, 0, materials.size() * sizeof(MaterialData), materials.data());
 
@@ -315,20 +368,42 @@ void FateRenderer::render(const Scene& scene) {
     glUseProgram(shaderProgram);
     glBindVertexArray(vao);
 
+    glBindBuffer(GL_DRAW_INDIRECT_BUFFER, dib);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, transformBufferSSBO);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, materialBufferSSBO);
 
-    glBindBuffer(GL_DRAW_INDIRECT_BUFFER, dib);
+    glEnable(GL_DEPTH_TEST);
 
-    if (indirectBuffer.empty()) return;
+    glNamedBufferSubData(dib, 0, indirectBuffer.size() * sizeof(DrawElementsIndirectCommand), indirectBuffer.data());
 
-    glMultiDrawElementsIndirect(
-        GL_TRIANGLES,
-        GL_UNSIGNED_INT,
-        nullptr,
-        indirectBuffer.size(),
-        0
-    );
+    // Opaque pass
+    if (opaqueCount > 0) {
+        glDisable(GL_BLEND);
+        glDepthMask(GL_TRUE);
+
+        glMultiDrawElementsIndirect(
+            GL_TRIANGLES,
+            GL_UNSIGNED_INT,
+            nullptr,
+            opaqueCount,
+            0
+        );
+    }
+
+    // Transparent pass
+    if (transparentCount > 0) {
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+        glDepthMask(GL_FALSE);
+
+        glMultiDrawElementsIndirect(
+            GL_TRIANGLES,
+            GL_UNSIGNED_INT,
+            reinterpret_cast<const void *>(opaqueCount * sizeof(DrawElementsIndirectCommand)),
+            transparentCount,
+            0
+        );
+    }
 }
 
 void FateRenderer::drawEditorUI(const Scene& scene, const double deltaTime) {

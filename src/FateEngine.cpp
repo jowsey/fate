@@ -5,6 +5,7 @@
 
 #include "Material.h"
 #include "Scene.h"
+#include "assimp/GltfMaterial.h"
 #include "assimp/Importer.hpp"
 #include "assimp/material.h"
 #include "assimp/mesh.h"
@@ -34,31 +35,57 @@ void FateEngine::setActiveScene(std::unique_ptr<Scene> scene) {
 Material FateEngine::processNodeMaterial(const aiMaterial* nodeMaterial, const aiScene* scene) {
     constexpr aiTextureType type = aiTextureType_DIFFUSE; // todo parameter
 
+    aiString materialName;
+    if (nodeMaterial->Get(AI_MATKEY_NAME, materialName) == AI_SUCCESS) {
+        std::string nameStr(materialName.C_Str());
+        std::print("Processing material: {}\n", materialName.C_Str());
+    }
+
     Material material;
+    nodeMaterial->Get(AI_MATKEY_BASE_COLOR, material.baseColour);
     nodeMaterial->Get(AI_MATKEY_METALLIC_FACTOR, material.metallic);
     nodeMaterial->Get(AI_MATKEY_ROUGHNESS_FACTOR, material.roughness);
+
+    aiString alphaMode;
+    if (nodeMaterial->Get(AI_MATKEY_GLTF_ALPHAMODE, alphaMode) == AI_SUCCESS) {
+        const std::string modeStr(alphaMode.C_Str());
+        material.useAlpha = modeStr != "OPAQUE";
+
+        // hack: re-route transmission extension to flat opacity, todo
+        if (!material.useAlpha) {
+            float transmissionFactor;
+            const bool isTransmission = nodeMaterial->Get(AI_MATKEY_TRANSMISSION_FACTOR, transmissionFactor) == AI_SUCCESS;
+
+            if (isTransmission) {
+                material.useAlpha = true;
+                material.baseColour.a = 0.01f;
+            }
+        }
+    }
 
     // diffuse/albedo
     aiString texturePath;
     if (nodeMaterial->GetTexture(type, 0, &texturePath) == AI_SUCCESS) {
-        std::println("Found {} texture with path: {}", aiTextureTypeToString(type), texturePath.C_Str());
+        std::print("- Found {} texture at {}", aiTextureTypeToString(type), texturePath.C_Str());
+        material.mapFlags |= static_cast<std::uint32_t>(MapFlags::HasAlbedoMap);
+
         if (const aiTexture* texture = scene->GetEmbeddedTexture(texturePath.C_Str())) {
             // is embedded texture
-            std::println("- texture is embedded");
+            std::print(", embedded");
 
             if (texture->mHeight == 0) {
                 // is compressed texture
-                std::println("-- compressed with format: {}", texture->achFormatHint);
+                std::print(", compressed ({})", texture->achFormatHint);
 
                 const auto pngBuffer = reinterpret_cast<const uint8_t *>(texture->pcData);
                 const std::size_t pngBufferSize = texture->mWidth;
 
-                std::println("-- png buffer size: {}", FileUtils::prettyBytes(pngBufferSize));
+                std::print(", size {}", FileUtils::prettyBytes(pngBufferSize));
 
                 std::uint32_t width, height;
                 const auto decodedData = FileUtils::decodePng(pngBuffer, pngBufferSize, width, height);
 
-                std::println("-- decoded with size {}x{}", width, height);
+                std::print(", dimensions {}x{}\n", width, height);
 
                 material.albedoMapHandle = renderer.uploadTexture({width, height, decodedData.get()});
             }
@@ -66,7 +93,7 @@ Material FateEngine::processNodeMaterial(const aiMaterial* nodeMaterial, const a
                 // is uncompressed texture
                 const auto width = texture->mWidth;
                 const auto height = texture->mHeight;
-                std::println("-- uncompressed with size: {}x{}", width, height);
+                std::print(", uncompressed, dimensions ({}x{})\n", width, height);
 
                 // todo guesswork, test
                 const auto pixelData = reinterpret_cast<uint8_t *>(texture->pcData);
@@ -87,17 +114,20 @@ Mesh FateEngine::processNodeMesh(const aiMesh* mesh, const aiScene* scene) {
     for (std::size_t i = 0; i < mesh->mNumVertices; i++) {
         Vertex vertex;
 
-        vertex.position = {mesh->mVertices[i].x, mesh->mVertices[i].y, mesh->mVertices[i].z};
+        if (mesh->HasVertexColors(0)) {
+            vertex.baseColour = {mesh->mColors[0][i].r, mesh->mColors[0][i].g, mesh->mColors[0][i].b, mesh->mColors[0][i].a};
+        }
+
+        if (mesh->HasPositions()) {
+            vertex.position = {mesh->mVertices[i].x, mesh->mVertices[i].y, mesh->mVertices[i].z};
+        }
 
         if (mesh->HasNormals()) {
             vertex.normal = {mesh->mNormals[i].x, mesh->mNormals[i].y, mesh->mNormals[i].z};
         }
 
         if (mesh->HasTextureCoords(0)) {
-            vertex.uv = {mesh->mTextureCoords[0][i].x, mesh->mTextureCoords[0][i].y};
-        }
-        else {
-            vertex.uv = {0.0f, 0.0f};
+            vertex.texCoord = {mesh->mTextureCoords[0][i].x, mesh->mTextureCoords[0][i].y};
         }
 
         vertices.push_back(vertex);

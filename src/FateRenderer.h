@@ -18,18 +18,28 @@ struct DrawElementsIndirectCommand {
     GLuint baseInstance;
 };
 
-struct TransformBuffer {
+struct alignas(16) TransformBuffer {
     glm::mat4 modelMatrices[];
 };
 
-struct MaterialData {
+struct alignas(16) MaterialData {
+    glm::vec4 baseColour;
     GLuint64 albedoMapHandle;
+    std::uint32_t mapFlags;
     float metallic;
     float roughness;
 };
 
 struct MaterialBuffer {
     MaterialData materials[];
+};
+
+struct RenderItem {
+    DrawElementsIndirectCommand command;
+    glm::mat4 modelMatrix;
+    MaterialData material;
+    float distance;
+    bool isTransparent;
 };
 
 class FateRenderer {

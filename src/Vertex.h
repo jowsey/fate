@@ -1,8 +1,9 @@
 #pragma once
-#include <array>
+#include "glm/glm.hpp"
 
 struct Vertex {
-    std::array<float, 3> position{};
-    std::array<float, 3> normal{};
-    std::array<float, 2> uv{};
+    glm::vec4 baseColour{1.0f};
+    glm::vec3 position{};
+    glm::vec3 normal{};
+    glm::vec2 texCoord{};
 };
