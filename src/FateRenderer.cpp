@@ -229,6 +229,17 @@ void DrawSceneHierarchyNode(SceneTransform& transform) {
             transform.setPosition(position);
         }
 
+        for (std::size_t i = 0; i < transform.getObject().getMeshes().size(); ++i) {
+            const auto mesh = transform.getObject().getMeshes()[i];
+            const auto material = mesh->getMaterial();
+
+            if (ImGui::CollapsingHeader(("Mesh " + std::to_string(i)).c_str())) {
+                ImGui::Text("%zu vertices, %zu indices", mesh->getVertices().size(), mesh->getIndices().size());
+                ImGui::Text("Has albedo map: %s", material->albedoMapHandle.has_value() ? "true" : "false");
+                ImGui::Text("Metallic: %.3f, Roughness: %.3f", material->metallic, material->roughness);
+            }
+        }
+
         for (SceneTransform* childTransform: transform.getChildren()) {
             DrawSceneHierarchyNode(*childTransform);
         }
@@ -363,7 +374,7 @@ void FateRenderer::drawEditorUI(const Scene& scene, const double deltaTime) {
 
     ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
 
-    ImGui::Begin("fate");
+    ImGui::Begin("Debug");
 
     ImGui::DragScalarN("Camera position", ImGuiDataType_Double, &cameraPosition, 3, 0.01f);
     ImGui::DragFloat3("Camera rotation", &cameraRotation.x, 0.01f);
