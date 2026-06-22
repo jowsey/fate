@@ -117,22 +117,22 @@ FateRenderer::FateRenderer() {
 
     // baseColour
     glEnableVertexArrayAttrib(vao, 0);
-    glVertexArrayAttribFormat(vao, 0, 4, GL_FLOAT, GL_FALSE, 0 * sizeof(float));
+    glVertexArrayAttribFormat(vao, 0, 4, GL_FLOAT, GL_FALSE, offsetof(Vertex, baseColour));
     glVertexArrayAttribBinding(vao, 0, 0);
 
     // position
     glEnableVertexArrayAttrib(vao, 1);
-    glVertexArrayAttribFormat(vao, 1, 3, GL_FLOAT, GL_FALSE, 4 * sizeof(float));
+    glVertexArrayAttribFormat(vao, 1, 3, GL_FLOAT, GL_FALSE, offsetof(Vertex, position));
     glVertexArrayAttribBinding(vao, 1, 0);
 
     // normal
     glEnableVertexArrayAttrib(vao, 2);
-    glVertexArrayAttribFormat(vao, 2, 3, GL_FLOAT, GL_FALSE, 7 * sizeof(float));
+    glVertexArrayAttribFormat(vao, 2, 3, GL_FLOAT, GL_FALSE, offsetof(Vertex, normal));
     glVertexArrayAttribBinding(vao, 2, 0);
 
     // texCoord
     glEnableVertexArrayAttrib(vao, 3);
-    glVertexArrayAttribFormat(vao, 3, 2, GL_FLOAT, GL_FALSE, 10 * sizeof(float));
+    glVertexArrayAttribFormat(vao, 3, 2, GL_FLOAT, GL_FALSE, offsetof(Vertex, texCoord));
     glVertexArrayAttribBinding(vao, 3, 0);
 
     // TransformBuffer SSBO
