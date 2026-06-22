@@ -31,6 +31,11 @@ add_executable(fate
 
 target_compile_definitions(fate PRIVATE FATE_VERSION="${PROJECT_VERSION}")
 
+# Windows app icon
+if (WIN32)
+    target_sources(fate PRIVATE "resources-build/app_icon.rc")
+endif ()
+
 # Static linking
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 target_link_options(fate PRIVATE "-static-libgcc" "-static-libstdc++" "-static")
@@ -59,15 +64,26 @@ if (CMAKE_BUILD_TYPE STREQUAL "Release")
     endif ()
 endif ()
 
+# Include shaders in checking for changes
+file(GLOB_RECURSE SHADER_FILES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/resources/Shaders/*")
+set(RESOURCE_TIMESTAMP "${CMAKE_CURRENT_BINARY_DIR}/resources.stamp")
+
 # Build directory
 set_target_properties(fate PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/dist/bin"
 )
 
-add_custom_command(TARGET fate POST_BUILD
+add_custom_command(
+        OUTPUT "${RESOURCE_TIMESTAMP}"
+        DEPENDS ${SHADER_FILES}
         COMMAND ${CMAKE_COMMAND} -E remove_directory "${CMAKE_CURRENT_BINARY_DIR}/dist/resources"
         COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/resources" "${CMAKE_CURRENT_BINARY_DIR}/dist/resources"
+        COMMAND ${CMAKE_COMMAND} -E touch "${RESOURCE_TIMESTAMP}"
+        COMMENT "Copying resources to build directory"
 )
+
+add_custom_target(copy_resources DEPENDS "${RESOURCE_TIMESTAMP}")
+add_dependencies(fate copy_resources)
 
 # glad
 add_library(glad STATIC
