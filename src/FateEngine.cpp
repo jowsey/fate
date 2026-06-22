@@ -2,12 +2,17 @@
 
 #include <print>
 
+#include "Material.h"
 #include "Scene.h"
 #include "assimp/Importer.hpp"
+#include "assimp/material.h"
 #include "assimp/mesh.h"
 #include "assimp/scene.h"
 #include "assimp/postprocess.h"
 #include "utils/Paths.h"
+#include "utils/Files.h"
+
+#include <iostream>
 
 void FateEngine::run() {
     while (!glfwWindowShouldClose(renderer.getWindow())) {
@@ -27,23 +32,54 @@ void FateEngine::setActiveScene(std::unique_ptr<Scene> scene) {
     activeScene = std::move(scene);
 }
 
-void processMaterial(aiMaterial* material, const aiScene* scene) {
-    // aiString texturePath;
-    //
-    // // diffuse/albedo
-    // if (material->GetTexture(aiTextureType_DIFFUSE, 0, &texturePath) == AI_SUCCESS) {
-    //     // embedded texture
-    //     if (auto texture = scene->GetEmbeddedTexture(texturePath.C_Str())) {
-    //         // compressed texture
-    //         if (texture->mHeight == 0) {
-    //             auto compressedData = reinterpret_cast<unsigned char*>(texture->pcData);
-    //             auto dataSize = texture->mWidth;
-    //         }
-    //     }
-    // }
+Material FateEngine::processNodeMaterial(const aiMaterial* nodeMaterial, const aiScene* scene) {
+    constexpr aiTextureType type = aiTextureType_DIFFUSE; // todo parameter
+
+    Material material;
+    nodeMaterial->Get(AI_MATKEY_METALLIC_FACTOR, material.metallic);
+    nodeMaterial->Get(AI_MATKEY_ROUGHNESS_FACTOR, material.roughness);
+
+    // diffuse/albedo
+    aiString texturePath;
+    if (nodeMaterial->GetTexture(type, 0, &texturePath) == AI_SUCCESS) {
+        std::println("Found {} texture with path: {}", aiTextureTypeToString(type), texturePath.C_Str());
+        if (const aiTexture* texture = scene->GetEmbeddedTexture(texturePath.C_Str())) {
+            // is embedded texture
+            std::println("- texture is embedded");
+
+            if (texture->mHeight == 0) {
+                // is compressed texture
+                std::println("-- compressed with format: {}", texture->achFormatHint);
+
+                const auto pngBuffer = reinterpret_cast<const uint8_t *>(texture->pcData);
+                const std::size_t pngBufferSize = texture->mWidth;
+
+                std::println("-- png buffer size: {}", FileUtils::prettyBytes(pngBufferSize));
+
+                std::uint32_t width, height;
+                const auto decodedData = FileUtils::decodePng(pngBuffer, pngBufferSize, width, height);
+
+                std::println("-- decoded with size {}x{}", width, height);
+
+                material.albedoMapHandle = renderer.uploadTexture({width, height, decodedData.get()});
+            }
+            else {
+                // is uncompressed texture
+                const auto width = texture->mWidth;
+                const auto height = texture->mHeight;
+                std::println("-- uncompressed with size: {}x{}", width, height);
+
+                // todo guesswork, test
+                const auto pixelData = reinterpret_cast<uint8_t *>(texture->pcData);
+                material.albedoMapHandle = renderer.uploadTexture({width, height, pixelData});
+            }
+        }
+    }
+
+    return material;
 }
 
-Mesh processMesh(const aiMesh* mesh, const aiScene* scene) {
+Mesh FateEngine::processNodeMesh(const aiMesh* mesh, const aiScene* scene) {
     std::vector<Vertex> vertices;
     vertices.reserve(mesh->mNumVertices);
     std::vector<std::uint32_t> indices;
@@ -75,10 +111,11 @@ Mesh processMesh(const aiMesh* mesh, const aiScene* scene) {
         }
     }
 
-    // aiMaterial* material = scene->mMaterials[mesh->mMaterialIndex];
-    // processMaterial(material, scene);
+    const aiMaterial* nodeMaterial = scene->mMaterials[mesh->mMaterialIndex];
+    auto meshMaterial = std::make_shared<Material>(processNodeMaterial(nodeMaterial, scene));
 
-    return Mesh(std::move(vertices), std::move(indices));
+    auto newMesh = Mesh(std::move(vertices), std::move(indices), std::move(meshMaterial));
+    return newMesh;
 }
 
 SceneObject* FateEngine::buildNodeSceneObject(const aiNode* node, const aiScene* scene) {
@@ -97,7 +134,7 @@ SceneObject* FateEngine::buildNodeSceneObject(const aiNode* node, const aiScene*
     for (std::size_t i = 0; i < node->mNumMeshes; i++) {
         const aiMesh* nodeMesh = scene->mMeshes[node->mMeshes[i]];
 
-        auto objectMesh = std::make_shared<Mesh>(processMesh(nodeMesh, scene));
+        auto objectMesh = std::make_shared<Mesh>(processNodeMesh(nodeMesh, scene));
         // todo renderer should handle this as required, engine shouldn't know about GPU handles
         objectMesh->setGPUHandle(renderer.uploadMesh(*objectMesh));
 

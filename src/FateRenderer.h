@@ -3,17 +3,12 @@
 #include <glad/glad.h>
 #include "GLFW/glfw3.h"
 
-#include <string_view>
 #include <filesystem>
 #include <vector>
 
 #include "GPUMeshHandle.h"
 #include "Scene.h"
-#include "Vertex.h"
-
-struct TransformBuffer {
-    glm::mat4 modelMatrices[];
-};
+#include "TextureData.h"
 
 struct DrawElementsIndirectCommand {
     GLuint count;
@@ -21,6 +16,20 @@ struct DrawElementsIndirectCommand {
     GLuint firstIndex;
     GLuint baseVertex;
     GLuint baseInstance;
+};
+
+struct TransformBuffer {
+    glm::mat4 modelMatrices[];
+};
+
+struct MaterialData {
+    GLuint64 albedoMapHandle;
+    float metallic;
+    float roughness;
+};
+
+struct MaterialBuffer {
+    MaterialData materials[];
 };
 
 class FateRenderer {
@@ -36,15 +45,19 @@ class FateRenderer {
     GLuint vao{};
     GLuint dib{};
     GLuint transformBufferSSBO{};
+    GLuint materialBufferSSBO{};
 
     std::vector<DrawElementsIndirectCommand> indirectBuffer{};
     std::vector<glm::mat4> modelMatrices{};
+    std::vector<MaterialData> materials{};
 
     std::size_t vboOffset{0};
     std::size_t eboOffset{0};
 
     glm::dvec3 cameraPosition{2.25f, 1.0f, 5.0f};
     glm::vec3 cameraRotation{0, 35.0f, 0};
+
+    GLuint64 missingTextureHandle;
 
 public:
     FateRenderer();
@@ -60,4 +73,6 @@ public:
     [[nodiscard]] GLFWwindow* getWindow() const { return window; }
 
     GPUMeshHandle uploadMesh(const Mesh& mesh);
+
+    GLuint64 uploadTexture(const TextureData& data, GLuint minFilter = GL_LINEAR, GLuint magFilter = GL_LINEAR);
 };

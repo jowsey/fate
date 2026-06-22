@@ -10,6 +10,10 @@ class FateEngine {
     FateRenderer renderer;
     std::unique_ptr<Scene> activeScene;
 
+    Material processNodeMaterial(const aiMaterial* nodeMaterial, const aiScene* scene);
+
+    Mesh processNodeMesh(const aiMesh* mesh, const aiScene* scene);
+
     SceneObject* buildNodeSceneObject(const aiNode* node, const aiScene* scene);
 
     double lastTime{0};

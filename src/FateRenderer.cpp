@@ -21,6 +21,7 @@
 #include "Scene.h"
 
 #include "GPUMeshHandle.h"
+#include "TextureData.h"
 #include "utils/Files.h"
 #include "utils/Paths.h"
 
@@ -128,15 +129,30 @@ FateRenderer::FateRenderer() {
     glVertexArrayAttribFormat(vao, 2, 2, GL_FLOAT, GL_FALSE, 6 * sizeof(float));
     glVertexArrayAttribBinding(vao, 2, 0);
 
-    // transformbuffer ssbo
+    // TransformBuffer SSBO
     glCreateBuffers(1, &transformBufferSSBO);
     glNamedBufferStorage(transformBufferSSBO, 128 * sizeof(glm::mat4), nullptr, GL_DYNAMIC_STORAGE_BIT);
+
+    // MaterialBuffer SSBO
+    glCreateBuffers(1, &materialBufferSSBO); // todo figure out what we're doing about buffer resizing
+    glNamedBufferStorage(materialBufferSSBO, 128 * sizeof(MaterialData), nullptr, GL_DYNAMIC_STORAGE_BIT);
 
     // draw indirect buffer
     glCreateBuffers(1, &dib);
     glNamedBufferStorage(dib, 128 * sizeof(DrawElementsIndirectCommand), nullptr, GL_DYNAMIC_STORAGE_BIT);
 
     glEnable(GL_DEPTH_TEST);
+
+    // default assets
+    std::uint32_t missingTextureWidth, missingTextureHeight;
+
+    auto missingTexture = FileUtils::loadPngFromFile(
+        PathUtils::getEnginePath() / "resources/Textures/missing.png",
+        missingTextureWidth,
+        missingTextureHeight
+    );
+
+    missingTextureHandle = uploadTexture({missingTextureWidth, missingTextureHeight, missingTexture.get()}, GL_NEAREST, GL_NEAREST);
 
     // imgui
     IMGUI_CHECKVERSION();
@@ -180,13 +196,17 @@ FateRenderer::FateRenderer() {
 FateRenderer::~FateRenderer() {
     glDeleteVertexArrays(1, &vao);
     glDeleteBuffers(1, &vbo);
+    glDeleteBuffers(1, &ebo);
+    glDeleteBuffers(1, &dib);
+    glDeleteBuffers(1, &transformBufferSSBO);
+    glDeleteBuffers(1, &materialBufferSSBO);
     glDeleteProgram(shaderProgram);
-
-    glfwTerminate();
 
     ImGui_ImplOpenGL3_Shutdown();
     ImGui_ImplGlfw_Shutdown();
     ImGui::DestroyContext();
+
+    glfwTerminate();
 }
 
 void DrawSceneHierarchyNode(SceneTransform& transform) {
@@ -229,6 +249,7 @@ void FateRenderer::render(const Scene& scene) {
 
     indirectBuffer.clear();
     modelMatrices.clear();
+    materials.clear();
 
     const auto& objects = scene.getObjects();
 
@@ -236,7 +257,9 @@ void FateRenderer::render(const Scene& scene) {
         const auto object = objects[i];
         const auto& meshes = object->getMeshes();
 
-        for (const auto& mesh: meshes) {
+        for (std::size_t j = 0; j < meshes.size(); ++j) {
+            const auto& mesh = meshes[j];
+
             // todo almost certainly doesn't need to be rebuilt from scratch every frame
             indirectBuffer.emplace_back(DrawElementsIndirectCommand{
                 .count = static_cast<GLuint>(mesh->getIndices().size()),
@@ -247,18 +270,31 @@ void FateRenderer::render(const Scene& scene) {
             });
 
             modelMatrices.push_back(glm::mat4(object->getTransform().getWorldMatrix()));
+
+            const auto material = mesh->getMaterial();
+
+            materials.push_back(MaterialData{
+                .albedoMapHandle = material->albedoMapHandle.value_or(missingTextureHandle),
+                .metallic = material->metallic,
+                .roughness = material->roughness
+            });
         }
     }
 
+    // todo we also definitely don't need to be resending everything every frame
     glNamedBufferSubData(dib, 0, indirectBuffer.size() * sizeof(DrawElementsIndirectCommand), indirectBuffer.data());
     glNamedBufferSubData(transformBufferSSBO, 0, modelMatrices.size() * sizeof(glm::mat4), modelMatrices.data());
+    glNamedBufferSubData(materialBufferSSBO, 0, materials.size() * sizeof(MaterialData), materials.data());
 
     glm::mat4 vp = proj * view;
     glProgramUniformMatrix4fv(shaderProgram, 0, 1, GL_FALSE, glm::value_ptr(vp));
 
     glUseProgram(shaderProgram);
     glBindVertexArray(vao);
+
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, transformBufferSSBO);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, materialBufferSSBO);
+
     glBindBuffer(GL_DRAW_INDIRECT_BUFFER, dib);
 
     if (indirectBuffer.empty()) return;
@@ -379,4 +415,23 @@ GPUMeshHandle FateRenderer::uploadMesh(const Mesh& mesh) {
     eboOffset += eboBytesNeeded;
 
     return GPUMeshHandle(vboStoredIndex / sizeof(Vertex), eboStoredIndex / sizeof(std::uint32_t));
+}
+
+GLuint64 FateRenderer::uploadTexture(const TextureData& data, const GLuint minFilter, const GLuint magFilter) {
+    GLuint texture;
+
+    std::println("Uploading texture of size {}x{} ({})", data.width, data.height, FileUtils::prettyBytes(data.width * data.height * 4));
+
+    glCreateTextures(GL_TEXTURE_2D, 1, &texture);
+    glTextureStorage2D(texture, 1, GL_RGBA8, data.width, data.height);
+    glTextureSubImage2D(texture, 0, 0, 0, data.width, data.height, GL_RGBA, GL_UNSIGNED_BYTE, data.pixels);
+    glTextureParameteri(texture, GL_TEXTURE_MIN_FILTER, minFilter);
+    glTextureParameteri(texture, GL_TEXTURE_MAG_FILTER, magFilter);
+    glTextureParameteri(texture, GL_TEXTURE_WRAP_S, GL_REPEAT);
+    glTextureParameteri(texture, GL_TEXTURE_WRAP_T, GL_REPEAT);
+
+    const GLuint64 textureHandle = glGetTextureHandleARB(texture);
+    glMakeTextureHandleResidentARB(textureHandle);
+
+    return textureHandle;
 }

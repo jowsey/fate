@@ -7,25 +7,26 @@ set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 include(FetchContent)
 
 add_executable(fate
-        src/main.cpp
-        src/FateRenderer.cpp
-        src/FateRenderer.h
-        src/FateEngine.cpp
-        src/FateEngine.h
-        src/SceneObject.cpp
-        src/SceneObject.h
-        src/Scene.cpp
-        src/Scene.h
-        src/SceneTransform.cpp
-        src/SceneTransform.h
-        src/Vertex.h
-        src/GPUMeshHandle.h
-        src/Mesh.h
-        src/Material.h
         src/utils/Paths.cpp
         src/utils/Paths.h
         src/utils/Files.cpp
         src/utils/Files.h
+        src/FateEngine.cpp
+        src/FateEngine.h
+        src/FateRenderer.cpp
+        src/FateRenderer.h
+        src/GPUMeshHandle.h
+        src/main.cpp
+        src/Material.h
+        src/Mesh.h
+        src/Scene.cpp
+        src/Scene.h
+        src/SceneObject.cpp
+        src/SceneObject.h
+        src/SceneTransform.cpp
+        src/SceneTransform.h
+        src/TextureData.h
+        src/Vertex.h
 )
 
 target_compile_definitions(fate PRIVATE FATE_VERSION="${PROJECT_VERSION}")
@@ -134,6 +135,19 @@ set(ASSIMP_BUILD_ZLIB ON CACHE BOOL "" FORCE)
 
 FetchContent_MakeAvailable(assimp)
 target_link_libraries(fate PRIVATE assimp)
+
+# wuffs
+FetchContent_Declare(
+        wuffs
+        GIT_REPOSITORY https://github.com/google/wuffs.git
+        GIT_TAG v0.3.4
+        GIT_SHALLOW TRUE
+)
+
+FetchContent_MakeAvailable(wuffs)
+add_library(wuffs INTERFACE)
+target_include_directories(wuffs INTERFACE ${wuffs_SOURCE_DIR}/release/c)
+target_link_libraries(fate PRIVATE wuffs)
 
 # CLI11
 FetchContent_Declare(
