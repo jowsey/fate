@@ -191,6 +191,22 @@ FateRenderer::FateRenderer() {
 
     ImGui_ImplGlfw_InitForOpenGL(window, true);
     ImGui_ImplOpenGL3_Init();
+
+    // set window icon
+    auto windowIcon = GLFWimage();
+
+    std::uint32_t iconWidth, iconHeight;
+    const auto iconPixels = FileUtils::loadPngFromFile(
+        PathUtils::getEnginePath() / "resources/Textures/fate-icon.png",
+        iconWidth,
+        iconHeight
+    );
+
+    windowIcon.width = static_cast<int>(iconWidth);
+    windowIcon.height = static_cast<int>(iconHeight);
+    windowIcon.pixels = iconPixels.get();
+    glfwSetWindowIcon(window, 1, &windowIcon);
+    glfwPollEvents(); // required, windows bug
 }
 
 FateRenderer::~FateRenderer() {
