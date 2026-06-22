@@ -40,6 +40,7 @@ class FateRenderer {
     GLuint transformBufferSSBO{};
 
     std::vector<DrawElementsIndirectCommand> indirectBuffer{};
+    std::vector<glm::mat4> modelMatrices{};
 
     std::size_t vboOffset{0};
     std::size_t eboOffset{0};

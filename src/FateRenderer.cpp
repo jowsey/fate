@@ -230,7 +230,7 @@ void FateRenderer::render(const Scene& scene) {
     const glm::mat4 view = glm::inverse(glm::translate(glm::mat4(1.0f), glm::vec3(cameraPosition)) * glm::mat4_cast(glm::quat(glm::radians(cameraRotation))));
 
     indirectBuffer.clear();
-    std::vector<glm::mat4> meshTransforms{};
+    modelMatrices.clear();
 
     const auto& objects = scene.getObjects();
 
@@ -248,12 +248,12 @@ void FateRenderer::render(const Scene& scene) {
                 .baseInstance = 0
             });
 
-            meshTransforms.push_back(glm::mat4(object->getTransform().getWorldMatrix()));
+            modelMatrices.push_back(glm::mat4(object->getTransform().getWorldMatrix()));
         }
     }
 
     glNamedBufferSubData(dib, 0, indirectBuffer.size() * sizeof(DrawElementsIndirectCommand), indirectBuffer.data());
-    glNamedBufferSubData(transformBufferSSBO, 0, meshTransforms.size() * sizeof(glm::mat4), meshTransforms.data());
+    glNamedBufferSubData(transformBufferSSBO, 0, modelMatrices.size() * sizeof(glm::mat4), modelMatrices.data());
 
     glm::mat4 vp = proj * view;
     glProgramUniformMatrix4fv(shaderProgram, 0, 1, GL_FALSE, glm::value_ptr(vp));
