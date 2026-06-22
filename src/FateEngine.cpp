@@ -7,7 +7,7 @@
 #include "assimp/mesh.h"
 #include "assimp/scene.h"
 #include "assimp/postprocess.h"
-#include "util/Utils.h"
+#include "utils/Paths.h"
 
 void FateEngine::run() {
     while (!glfwWindowShouldClose(renderer.getWindow())) {

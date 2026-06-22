@@ -2,7 +2,7 @@
 #include <array>
 #include <CLI/CLI.hpp>
 
-#include "src/util/Utils.h"
+#include "src/utils/Paths.h"
 
 int main(const int argc, char** argv) {
     CLI::App app;

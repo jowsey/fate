@@ -21,7 +21,8 @@
 #include "Scene.h"
 
 #include "GPUMeshHandle.h"
-#include "util/Utils.h"
+#include "utils/Files.h"
+#include "utils/Paths.h"
 
 void APIENTRY glDebugOutput(GLenum source, GLenum type, unsigned int id, GLenum severity, GLsizei length, const char* message, const void* userParam) {
     // suppress non-significant
@@ -93,7 +94,7 @@ FateRenderer::FateRenderer() {
     }
 
     // shaders
-    const auto shaderPath = getEnginePath() / "resources/Shaders";
+    const auto shaderPath = PathUtils::getEnginePath() / "resources/Shaders";
     const GLuint vertexShader = loadShader(GL_VERTEX_SHADER, shaderPath / "lit.vert");
     const GLuint fragmentShader = loadShader(GL_FRAGMENT_SHADER, shaderPath / "lit.frag");
 
@@ -147,7 +148,7 @@ FateRenderer::FateRenderer() {
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 
-    io.Fonts->AddFontFromFileTTF(getExecutablePath().parent_path().parent_path().append("resources/Fonts/Inter_18pt-Regular.ttf").string().c_str());
+    io.Fonts->AddFontFromFileTTF((PathUtils::getEnginePath() / "resources/Fonts/Inter_18pt-Regular.ttf").string().c_str());
 
     constexpr auto bgLight = ImColor(42, 42, 42);
     constexpr auto bgDark = ImColor(26, 26, 26);
@@ -285,7 +286,7 @@ void FateRenderer::drawEditorUI(const Scene& scene, const double deltaTime) {
 
         if (ImGui::BeginMenu("Help")) {
             if (ImGui::MenuItem("View on GitHub")) {
-                openBrowser("https://github.com/jowsey/fate");
+                PathUtils::openBrowser("https://github.com/jowsey/fate");
             }
 
             ImGui::Separator();
@@ -332,13 +333,13 @@ void FateRenderer::drawEditorUI(const Scene& scene, const double deltaTime) {
         ImGui::ProgressBar(
             static_cast<float>(vboOffset) / DefaultBufferSize,
             ImVec2(-1.0f, 0.0f),
-            std::format("VBO usage: {} ({:.5f}%)", prettyBytes(vboOffset), static_cast<float>(vboOffset) / DefaultBufferSize * 100.0f).c_str()
+            std::format("VBO usage: {} ({:.5f}%)", FileUtils::prettyBytes(vboOffset), static_cast<float>(vboOffset) / DefaultBufferSize * 100.0f).c_str()
         );
 
         ImGui::ProgressBar(
             static_cast<float>(eboOffset) / DefaultBufferSize,
             ImVec2(-1.0f, 0.0f),
-            std::format("EBO usage: {} ({:.5f}%)", prettyBytes(eboOffset), static_cast<float>(eboOffset) / DefaultBufferSize * 100.0f).c_str()
+            std::format("EBO usage: {} ({:.5f}%)", FileUtils::prettyBytes(eboOffset), static_cast<float>(eboOffset) / DefaultBufferSize * 100.0f).c_str()
         );
     }
 
@@ -365,7 +366,10 @@ GPUMeshHandle FateRenderer::uploadMesh(const Mesh& mesh) {
         throw std::runtime_error("EBO buffer overflow, see todo");
     }
 
-    std::println("Uploading mesh with {} vertices ({}) and {} indices ({})", mesh.getVertices().size(), prettyBytes(vboBytesNeeded), mesh.getIndices().size(), prettyBytes(eboBytesNeeded));
+    std::println("Uploading mesh with {} vertices ({}) and {} indices ({})",
+                 mesh.getVertices().size(), FileUtils::prettyBytes(vboBytesNeeded),
+                 mesh.getIndices().size(), FileUtils::prettyBytes(eboBytesNeeded)
+    );
 
     glNamedBufferSubData(vbo, vboOffset, mesh.getVertices().size() * sizeof(Vertex), mesh.getVertices().data());
     glNamedBufferSubData(ebo, eboOffset, mesh.getIndices().size() * sizeof(std::uint32_t), mesh.getIndices().data());
