@@ -473,6 +473,12 @@ void FateRenderer::drawEditorUI(const Scene& scene, const double deltaTime) {
             ImVec2(-1.0f, 0.0f),
             std::format("EBO usage: {} ({:.5f}%)", FileUtils::prettyBytes(eboOffset), static_cast<float>(eboOffset) / DefaultBufferSize * 100.0f).c_str()
         );
+
+        ImGui::ProgressBar(
+            0.0f,
+            ImVec2(-1.0f, 0.0f),
+            std::format("Texture usage: {}", FileUtils::prettyBytes(textureUploadedBytes)).c_str()
+        );
     }
 
     ImGui::End();
@@ -530,6 +536,8 @@ GLuint64 FateRenderer::uploadTexture(const TextureData& data, const GLuint minFi
 
     const GLuint64 textureHandle = glGetTextureHandleARB(texture);
     glMakeTextureHandleResidentARB(textureHandle);
+
+    textureUploadedBytes += data.width * data.height * 4;
 
     return textureHandle;
 }
