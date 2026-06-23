@@ -33,11 +33,9 @@ void FateEngine::setActiveScene(std::unique_ptr<Scene> scene) {
 }
 
 Material FateEngine::processNodeMaterial(const aiMaterial* nodeMaterial, const aiScene* scene) {
-    constexpr aiTextureType type = aiTextureType_DIFFUSE; // todo parameter
-
     aiString materialName;
     if (nodeMaterial->Get(AI_MATKEY_NAME, materialName) == AI_SUCCESS) {
-        std::string nameStr(materialName.C_Str());
+        std::string nameStr = materialName.C_Str();
         std::print("Processing material: {}\n", materialName.C_Str());
     }
 
@@ -48,7 +46,7 @@ Material FateEngine::processNodeMaterial(const aiMaterial* nodeMaterial, const a
 
     aiString alphaMode;
     if (nodeMaterial->Get(AI_MATKEY_GLTF_ALPHAMODE, alphaMode) == AI_SUCCESS) {
-        const std::string modeStr(alphaMode.C_Str());
+        const std::string modeStr = alphaMode.C_Str();
         material.useAlpha = modeStr != "OPAQUE";
 
         // hack: re-route transmission extension to flat opacity, todo
@@ -63,10 +61,11 @@ Material FateEngine::processNodeMaterial(const aiMaterial* nodeMaterial, const a
         }
     }
 
-    // diffuse/albedo
+    constexpr aiTextureType textureType = aiTextureType_DIFFUSE; // todo parameter
+
     aiString texturePath;
-    if (nodeMaterial->GetTexture(type, 0, &texturePath) == AI_SUCCESS) {
-        std::print("- Found {} texture at {}", aiTextureTypeToString(type), texturePath.C_Str());
+    if (nodeMaterial->GetTexture(textureType, 0, &texturePath) == AI_SUCCESS) {
+        std::print("- Found {} texture at {}", aiTextureTypeToString(textureType), texturePath.C_Str());
         material.mapFlags |= static_cast<std::uint32_t>(MapFlags::HasAlbedoMap);
 
         if (const aiTexture* texture = scene->GetEmbeddedTexture(texturePath.C_Str())) {
