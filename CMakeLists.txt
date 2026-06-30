@@ -6,6 +6,18 @@ set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 
 include(FetchContent)
 
+# Vulkan SDK
+if (NOT DEFINED ENV{VULKAN_SDK})
+    message(FATAL_ERROR "VULKAN_SDK environment variable not set")
+else ()
+    message("Found Vulkan SDK at $ENV{VULKAN_SDK}")
+endif ()
+
+find_package(Vulkan REQUIRED)
+include_directories(SYSTEM "$ENV{VULKAN_SDK}/include")
+
+find_program(SLANGC_EXE slangc HINTS "$ENV{VULKAN_SDK}/bin" REQUIRED)
+
 add_executable(fate
         src/utils/Paths.cpp
         src/utils/Paths.h
@@ -29,7 +41,12 @@ add_executable(fate
         src/Vertex.h
 )
 
-target_compile_definitions(fate PRIVATE FATE_VERSION="${PROJECT_VERSION}")
+target_compile_definitions(fate PRIVATE
+        FATE_VERSION="${fate_VERSION}"
+        FATE_VERSION_MAJOR=${fate_VERSION_MAJOR}
+        FATE_VERSION_MINOR=${fate_VERSION_MINOR}
+        FATE_VERSION_PATCH=${fate_VERSION_PATCH}
+)
 
 # Windows app icon
 if (WIN32)
@@ -64,14 +81,35 @@ if (CMAKE_BUILD_TYPE STREQUAL "Release")
     endif ()
 endif ()
 
-# Include shaders in checking for changes
-file(GLOB_RECURSE SHADER_FILES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/resources/Shaders/*")
-set(RESOURCE_TIMESTAMP "${CMAKE_CURRENT_BINARY_DIR}/resources.stamp")
-
 # Build directory
 set_target_properties(fate PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/dist/bin"
 )
+
+# Include shaders in checking for changes
+file(GLOB_RECURSE SHADER_FILES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/resources/Shaders/*")
+set(RESOURCE_TIMESTAMP "${CMAKE_CURRENT_BINARY_DIR}/resources.stamp")
+
+# Compile shaders and copy resources to build directory
+# todo test
+set(SLANGC_COMMANDS "")
+foreach (SHADER_FILE IN LISTS SHADER_FILES)
+    get_filename_component(SHADER_NAME "${SHADER_FILE}" NAME)
+    get_filename_component(SHADER_EXTENSION "${SHADER_FILE}" EXT)
+    if (SHADER_EXTENSION STREQUAL ".slang")
+        set(SPIRV_OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/resources/Shaders/${SHADER_NAME}.spv")
+        add_custom_command(
+                OUTPUT "${SPIRV_OUTPUT}"
+                COMMAND ${SLANGC_EXE} "${SHADER_FILE}" -target spirv -o "${SPIRV_OUTPUT}"
+                DEPENDS "${SHADER_FILE}"
+                COMMENT "Compiling shader ${SHADER_NAME} to SPIR-V"
+        )
+        list(APPEND SLANGC_COMMANDS "${SPIRV_OUTPUT}")
+    endif ()
+endforeach ()
+
+add_custom_target(compile_shaders ALL DEPENDS ${SLANGC_COMMANDS})
+add_dependencies(fate compile_shaders)
 
 add_custom_command(
         OUTPUT "${RESOURCE_TIMESTAMP}"
@@ -85,31 +123,58 @@ add_custom_command(
 add_custom_target(copy_resources DEPENDS "${RESOURCE_TIMESTAMP}")
 add_dependencies(fate copy_resources)
 
-# glad
-add_library(glad STATIC
-        vendor/glad/src/glad.c
-)
-
-target_include_directories(glad PUBLIC
-        vendor/glad/include
-)
-
-target_link_libraries(fate PRIVATE glad)
-
-# GLFW
+# Volk
 FetchContent_Declare(
-        glfw
-        GIT_REPOSITORY https://github.com/glfw/glfw.git
-        GIT_TAG 3.4
+        volk
+        GIT_REPOSITORY https://github.com/zeux/volk.git
+        GIT_TAG 1.4.350
         GIT_SHALLOW TRUE
 )
 
-set(GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE)
-set(GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-set(GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(volk)
+target_link_libraries(fate PRIVATE volk)
 
-FetchContent_MakeAvailable(glfw)
-target_link_libraries(fate PRIVATE glfw)
+# VMA
+FetchContent_Declare(
+        vma
+        GIT_REPOSITORY https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git
+        GIT_TAG v3.4.0
+        GIT_SHALLOW TRUE
+)
+
+FetchContent_MakeAvailable(vma)
+target_link_libraries(fate PRIVATE GPUOpen::VulkanMemoryAllocator)
+
+# KTX
+FetchContent_Declare(
+        ktx
+        GIT_REPOSITORY https://github.com/KhronosGroup/KTX-Software.git
+        GIT_TAG v4.4.2
+        GIT_SHALLOW TRUE
+)
+
+set(KTX_FEATURE_TOOLS OFF CACHE BOOL "" FORCE)
+set(KTX_FEATURE_TESTS OFF CACHE BOOL "" FORCE)
+set(KTX_FEATURE_APPS OFF CACHE BOOL "" FORCE)
+
+FetchContent_MakeAvailable(ktx)
+target_link_libraries(fate PRIVATE ktx)
+
+# SDL3
+FetchContent_Declare(
+        sdl3
+        GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
+        GIT_TAG release-3.4.10
+        GIT_SHALLOW TRUE
+)
+
+set(SDL_SHARED OFF CACHE BOOL "" FORCE)
+set(SDL_STATIC ON CACHE BOOL "" FORCE)
+set(SDL_TEST OFF CACHE BOOL "" FORCE)
+set(SDL_DOCS OFF CACHE BOOL "" FORCE)
+
+FetchContent_MakeAvailable(sdl3)
+target_link_libraries(fate PRIVATE SDL3::SDL3)
 
 # GLM
 FetchContent_Declare(
@@ -138,8 +203,10 @@ set(IMGUI_SOURCES
         ${imgui_SOURCE_DIR}/imgui_draw.cpp
         ${imgui_SOURCE_DIR}/imgui_tables.cpp
         ${imgui_SOURCE_DIR}/imgui_widgets.cpp
-        ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
-        ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
+        #        ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
+        #        ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
+        ${imgui_SOURCE_DIR}/backends/imgui_impl_sdl3.cpp
+        ${imgui_SOURCE_DIR}/backends/imgui_impl_vulkan.cpp
 )
 
 add_library(imgui STATIC ${IMGUI_SOURCES})

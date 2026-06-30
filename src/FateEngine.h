@@ -1,4 +1,6 @@
 #pragma once
+#include <filesystem>
+
 #include "FateRenderer.h"
 
 #include "Scene.h"
@@ -24,7 +26,7 @@ public:
 
     void setActiveScene(std::unique_ptr<Scene> scene);
 
-    Scene* getActiveScene() const { return activeScene.get(); }
+    [[nodiscard]] Scene* getActiveScene() const { return activeScene.get(); }
 
     SceneObject* buildAssetSceneObject(const std::filesystem::path& path);
 

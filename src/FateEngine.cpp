@@ -3,6 +3,7 @@
 #include <print>
 #include <iostream>
 
+#include "imgui_impl_sdl3.h"
 #include "Material.h"
 #include "Scene.h"
 #include "assimp/GltfMaterial.h"
@@ -13,12 +14,24 @@
 #include "assimp/postprocess.h"
 #include "utils/Paths.h"
 #include "utils/Files.h"
+#include "SDL3/SDL_events.h"
+#include "SDL3/SDL_timer.h"
 
 void FateEngine::run() {
-    while (!glfwWindowShouldClose(renderer.getWindow())) {
-        glfwPollEvents();
+    bool running = true;
+    SDL_Event event; // todo untangle render/engine wrt window
 
-        const double currentTime = glfwGetTime();
+    while (running) {
+        while (SDL_PollEvent(&event)) {
+            ImGui_ImplSDL3_ProcessEvent(&event);
+
+            if (event.type == SDL_EVENT_QUIT) {
+                running = false;
+                break;
+            }
+        }
+
+        const double currentTime = static_cast<double>(SDL_GetPerformanceCounter()) / static_cast<double>(SDL_GetPerformanceFrequency());
         deltaTime = currentTime - lastTime;
         lastTime = currentTime;
 
@@ -86,7 +99,7 @@ Material FateEngine::processNodeMaterial(const aiMaterial* nodeMaterial, const a
 
                 std::print(", dimensions {}x{}\n", width, height);
 
-                material.albedoMapHandle = renderer.uploadTexture({width, height, decodedData.get()});
+                // material.albedoMapHandle = renderer.uploadTexture({width, height, decodedData.get()});
             }
             else {
                 // is uncompressed texture
@@ -96,7 +109,7 @@ Material FateEngine::processNodeMaterial(const aiMaterial* nodeMaterial, const a
 
                 // todo guesswork, test
                 const auto pixelData = reinterpret_cast<uint8_t *>(texture->pcData);
-                material.albedoMapHandle = renderer.uploadTexture({width, height, pixelData});
+                // material.albedoMapHandle = renderer.uploadTexture({width, height, pixelData});
             }
         }
     }
@@ -113,9 +126,9 @@ Mesh FateEngine::processNodeMesh(const aiMesh* mesh, const aiScene* scene) {
     for (std::size_t i = 0; i < mesh->mNumVertices; i++) {
         Vertex vertex;
 
-        if (mesh->HasVertexColors(0)) {
-            vertex.baseColour = {mesh->mColors[0][i].r, mesh->mColors[0][i].g, mesh->mColors[0][i].b, mesh->mColors[0][i].a};
-        }
+        // if (mesh->HasVertexColors(0)) {
+        //     vertex.baseColour = {mesh->mColors[0][i].r, mesh->mColors[0][i].g, mesh->mColors[0][i].b, mesh->mColors[0][i].a};
+        // }
 
         if (mesh->HasPositions()) {
             vertex.position = {mesh->mVertices[i].x, mesh->mVertices[i].y, mesh->mVertices[i].z};
@@ -164,7 +177,7 @@ SceneObject* FateEngine::buildNodeSceneObject(const aiNode* node, const aiScene*
 
         auto objectMesh = std::make_shared<Mesh>(processNodeMesh(nodeMesh, scene));
         // todo renderer should handle this as required, engine shouldn't know about GPU handles
-        objectMesh->setGPUHandle(renderer.uploadMesh(*objectMesh));
+        // objectMesh->setGPUHandle(renderer.uploadMesh(*objectMesh));
 
         sceneObject->addMesh(std::move(objectMesh));
     }
