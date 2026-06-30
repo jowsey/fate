@@ -39,6 +39,8 @@ add_executable(fate
         src/SceneTransform.h
         src/TextureData.h
         src/Vertex.h
+        src/IndexAllocator.cpp
+        src/IndexAllocator.h
 )
 
 target_compile_definitions(fate PRIVATE
@@ -87,7 +89,7 @@ set_target_properties(fate PROPERTIES
 )
 
 # Include shaders in checking for changes
-file(GLOB_RECURSE SHADER_FILES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/resources/Shaders/*")
+file(GLOB_RECURSE SHADER_FILES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/resources/Shaders/*.slang")
 set(RESOURCE_TIMESTAMP "${CMAKE_CURRENT_BINARY_DIR}/resources.stamp")
 
 # Compile shaders and copy resources to build directory
@@ -95,17 +97,14 @@ set(RESOURCE_TIMESTAMP "${CMAKE_CURRENT_BINARY_DIR}/resources.stamp")
 set(SLANGC_COMMANDS "")
 foreach (SHADER_FILE IN LISTS SHADER_FILES)
     get_filename_component(SHADER_NAME "${SHADER_FILE}" NAME)
-    get_filename_component(SHADER_EXTENSION "${SHADER_FILE}" EXT)
-    if (SHADER_EXTENSION STREQUAL ".slang")
-        set(SPIRV_OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/resources/Shaders/${SHADER_NAME}.spv")
-        add_custom_command(
-                OUTPUT "${SPIRV_OUTPUT}"
-                COMMAND ${SLANGC_EXE} "${SHADER_FILE}" -target spirv -o "${SPIRV_OUTPUT}"
-                DEPENDS "${SHADER_FILE}"
-                COMMENT "Compiling shader ${SHADER_NAME} to SPIR-V"
-        )
-        list(APPEND SLANGC_COMMANDS "${SPIRV_OUTPUT}")
-    endif ()
+    set(SPIRV_OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/resources/Shaders/${SHADER_NAME}.spv")
+    add_custom_command(
+            OUTPUT "${SPIRV_OUTPUT}"
+            COMMAND ${SLANGC_EXE} "${SHADER_FILE}" -target spirv -o "${SPIRV_OUTPUT}"
+            DEPENDS "${SHADER_FILE}"
+            COMMENT "Compiling shader ${SHADER_NAME} to SPIR-V"
+    )
+    list(APPEND SLANGC_COMMANDS "${SPIRV_OUTPUT}")
 endforeach ()
 
 add_custom_target(compile_shaders ALL DEPENDS ${SLANGC_COMMANDS})
@@ -131,6 +130,8 @@ FetchContent_Declare(
         GIT_SHALLOW TRUE
 )
 
+add_compile_definitions(VK_NO_PROTOTYPES)
+
 FetchContent_MakeAvailable(volk)
 target_link_libraries(fate PRIVATE volk)
 
@@ -140,6 +141,7 @@ FetchContent_Declare(
         GIT_REPOSITORY https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git
         GIT_TAG v3.4.0
         GIT_SHALLOW TRUE
+        SYSTEM
 )
 
 FetchContent_MakeAvailable(vma)
@@ -217,7 +219,7 @@ target_include_directories(imgui PUBLIC
 
 target_compile_definitions(imgui PUBLIC IMGUI_DISABLE_DEFAULT_FONT)
 
-target_link_libraries(imgui PRIVATE glfw)
+target_link_libraries(imgui PRIVATE Vulkan::Vulkan SDL3::SDL3)
 target_link_libraries(fate PRIVATE imgui)
 
 # assimp

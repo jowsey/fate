@@ -15,6 +15,7 @@ struct ObjectData
 
 struct VSInput
 {
+    float4 baseColour;
     float3 position;
     float3 normal;
     float2 uv;

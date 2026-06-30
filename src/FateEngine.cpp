@@ -99,7 +99,7 @@ Material FateEngine::processNodeMaterial(const aiMaterial* nodeMaterial, const a
 
                 std::print(", dimensions {}x{}\n", width, height);
 
-                // material.albedoMapHandle = renderer.uploadTexture({width, height, decodedData.get()});
+                material.albedoMap = renderer.uploadTexture({width, height, decodedData.get()});
             }
             else {
                 // is uncompressed texture
@@ -109,7 +109,7 @@ Material FateEngine::processNodeMaterial(const aiMaterial* nodeMaterial, const a
 
                 // todo guesswork, test
                 const auto pixelData = reinterpret_cast<uint8_t *>(texture->pcData);
-                // material.albedoMapHandle = renderer.uploadTexture({width, height, pixelData});
+                material.albedoMap = renderer.uploadTexture({width, height, pixelData});
             }
         }
     }
@@ -126,9 +126,9 @@ Mesh FateEngine::processNodeMesh(const aiMesh* mesh, const aiScene* scene) {
     for (std::size_t i = 0; i < mesh->mNumVertices; i++) {
         Vertex vertex;
 
-        // if (mesh->HasVertexColors(0)) {
-        //     vertex.baseColour = {mesh->mColors[0][i].r, mesh->mColors[0][i].g, mesh->mColors[0][i].b, mesh->mColors[0][i].a};
-        // }
+        if (mesh->HasVertexColors(0)) {
+            vertex.baseColour = {mesh->mColors[0][i].r, mesh->mColors[0][i].g, mesh->mColors[0][i].b, mesh->mColors[0][i].a};
+        }
 
         if (mesh->HasPositions()) {
             vertex.position = {mesh->mVertices[i].x, mesh->mVertices[i].y, mesh->mVertices[i].z};

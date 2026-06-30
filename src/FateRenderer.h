@@ -2,21 +2,15 @@
 
 #include <vector>
 
-#define VOLK_IMPLEMENTATION
-#include "volk.h"
-#define VMA_IMPLEMENTATION
-#include "vk_mem_alloc.h"
-
 #include "glm/glm.hpp"
+#include "SDL3/SDL.h"
 #include "SDL3/SDL_video.h"
 #include "GPUMeshHandle.h"
+#include "IndexAllocator.h"
 #include "Mesh.h"
 #include "Scene.h"
+#include "TextureData.h"
 
-// struct alignas(16) TransformBuffer {
-//     glm::mat4 modelMatrices[];
-// };
-//
 // struct alignas(16) MaterialData {
 //     glm::vec4 baseColour;
 //     // GLuint64 albedoMapHandle;
@@ -24,16 +18,12 @@
 //     float metallic;
 //     float roughness;
 // };
-//
-// struct MaterialBuffer {
-//     MaterialData materials[];
-// };
 
-struct Texture {
-    VmaAllocation allocation{VK_NULL_HANDLE};
+struct AllocatedTexture {
     VkImage image{VK_NULL_HANDLE};
     VkImageView view{VK_NULL_HANDLE};
-    VkSampler sampler{VK_NULL_HANDLE};
+    VmaAllocation allocation{VK_NULL_HANDLE};
+    std::uint32_t bindingIndex;
 };
 
 struct FrameGlobals {
@@ -54,6 +44,10 @@ struct AllocatedBuffer {
     VkDeviceAddress deviceAddress{};
 };
 
+struct SamplerCollection {
+    VkSampler linearRepeat{VK_NULL_HANDLE};
+};
+
 class FateRenderer {
     static constexpr std::uint32_t MaxObjects = 65536;
     static constexpr std::uint32_t MaxTextureDescriptors = 65536;
@@ -66,6 +60,8 @@ class FateRenderer {
     static void vkChk(VkResult result);
 
     void vkChkSwapchain(VkResult result);
+
+    IndexAllocator textureDescriptorAllocator{MaxTextureDescriptors};
 
     SDL_Window* window;
     VkSurfaceKHR surface{VK_NULL_HANDLE};
@@ -90,6 +86,8 @@ class FateRenderer {
     VmaAllocation depthImageAllocation;
     VkImageView depthImageView;
 
+    SamplerCollection samplers{};
+
     VkPipeline pipeline{VK_NULL_HANDLE};
     VkPipelineLayout pipelineLayout{VK_NULL_HANDLE};
 
@@ -109,10 +107,9 @@ class FateRenderer {
     VkDescriptorSet textureDescriptorSet{VK_NULL_HANDLE};
 
     FrameGlobals frameGlobals{};
-    std::vector<ObjectData> objectDatas{};
+    std::vector<ObjectData> objectDatas{}; // todo bad naming
     std::array<AllocatedBuffer, MaxFramesInFlight> frameGlobalsBuffers{};
     std::array<AllocatedBuffer, MaxFramesInFlight> objectDataBuffers{};
-
     std::array<AllocatedBuffer, MaxFramesInFlight> indirectBuffers{};
 
     glm::ivec2 windowSize{};
@@ -135,5 +132,5 @@ public:
 
     GPUMeshHandle uploadMesh(const Mesh& mesh);
 
-    // GLuint64 uploadTexture(const TextureData& data, GLuint minFilter = GL_LINEAR, GLuint magFilter = GL_LINEAR);
+    std::unique_ptr<AllocatedTexture> uploadTexture(const TextureData& data);
 };

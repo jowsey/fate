@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include "vk_mem_alloc.h"
 
 struct GPUMeshHandle {
     std::uint32_t verticesOffset;
