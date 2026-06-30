@@ -2,7 +2,6 @@
 
 #include "FateEngine.h"
 #include "Scene.h"
-#include "assimp/Importer.hpp"
 #include "utils/Paths.h"
 
 int main(const int argc, char** argv) {
