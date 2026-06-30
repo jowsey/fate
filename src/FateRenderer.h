@@ -55,9 +55,9 @@ struct AllocatedBuffer {
 };
 
 class FateRenderer {
-    static constexpr std::uint32_t GeometryBufferSize = 1024 * 1024 * 128; // 128MiB
-    static constexpr std::uint32_t TextureDescriptorCount = 65536;
     static constexpr std::uint32_t MaxObjects = 65536;
+    static constexpr std::uint32_t MaxTextureDescriptors = 65536;
+    static constexpr std::uint32_t GeometryBufferSize = 1024 * 1024 * 128; // 128MiB
     static constexpr std::uint32_t MaxFramesInFlight{2};
     static constexpr VkFormat FrameImageFormat{VK_FORMAT_B8G8R8A8_SRGB};
 
@@ -109,9 +109,11 @@ class FateRenderer {
     VkDescriptorSet textureDescriptorSet{VK_NULL_HANDLE};
 
     FrameGlobals frameGlobals{};
-    std::vector<ObjectData> objectData{};
+    std::vector<ObjectData> objectDatas{};
     std::array<AllocatedBuffer, MaxFramesInFlight> frameGlobalsBuffers{};
     std::array<AllocatedBuffer, MaxFramesInFlight> objectDataBuffers{};
+
+    std::array<AllocatedBuffer, MaxFramesInFlight> indirectBuffers{};
 
     glm::ivec2 windowSize{};
 
