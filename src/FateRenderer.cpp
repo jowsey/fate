@@ -234,8 +234,9 @@ FateRenderer::FateRenderer() {
     vkChk(vmaCreateVirtualBlock(&virtualBlockCI, &geometryVirtualBlock));
 
     // Shader data buffers
+    // todo abstract this to helper
     for (auto i = 0; i < MaxFramesInFlight; i++) {
-        // Frame globals buffer
+        // Frame globals
         VmaAllocationCreateInfo bufferAllocCI{.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT, .usage = VMA_MEMORY_USAGE_AUTO};
 
         VkBufferCreateInfo frameGlobalsBufferCI{.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO, .size = sizeof(FrameGlobals), .usage = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT};
@@ -243,11 +244,17 @@ FateRenderer::FateRenderer() {
         VkBufferDeviceAddressInfo frameGlobalsBufferBdaInfo{.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .buffer = frameGlobalsBuffers[i].buffer};
         frameGlobalsBuffers[i].deviceAddress = vkGetBufferDeviceAddress(device, &frameGlobalsBufferBdaInfo);
 
-        // Object data buffers
+        // Object datas
         VkBufferCreateInfo objectsDataBufferCI{.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO, .size = sizeof(ObjectData) * MaxObjects, .usage = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT};
         vkChk(vmaCreateBuffer(allocator, &objectsDataBufferCI, &bufferAllocCI, &objectDataBuffers[i].buffer, &objectDataBuffers[i].allocation, &objectDataBuffers[i].allocationInfo));
         VkBufferDeviceAddressInfo objectsDataBufferBdaInfo{.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .buffer = objectDataBuffers[i].buffer};
         objectDataBuffers[i].deviceAddress = vkGetBufferDeviceAddress(device, &objectsDataBufferBdaInfo);
+
+        // Draw commands
+        VkBufferCreateInfo drawCommandsBufferCI{.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO, .size = sizeof(VkDrawIndexedIndirectCommand) * MaxObjects, .usage = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT};
+        vkChk(vmaCreateBuffer(allocator, &drawCommandsBufferCI, &bufferAllocCI, &indirectBuffers[i].buffer, &indirectBuffers[i].allocation, &indirectBuffers[i].allocationInfo));
+        VkBufferDeviceAddressInfo drawCommandsBufferBdaInfo{.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .buffer = indirectBuffers[i].buffer};
+        indirectBuffers[i].deviceAddress = vkGetBufferDeviceAddress(device, &drawCommandsBufferBdaInfo);
     }
 
     // Sync objects
@@ -376,15 +383,15 @@ FateRenderer::FateRenderer() {
     // Descriptor sets
     VkDescriptorBindingFlags descBindingFlags{VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT};
     VkDescriptorSetLayoutBindingFlagsCreateInfo textureDescSetBindingFlagsCI{.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO, .bindingCount = 1, .pBindingFlags = &descBindingFlags};
-    VkDescriptorSetLayoutBinding textureDescSetLayoutBinding{.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, .descriptorCount = TextureDescriptorCount, .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT};
+    VkDescriptorSetLayoutBinding textureDescSetLayoutBinding{.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, .descriptorCount = MaxTextureDescriptors, .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT};
     VkDescriptorSetLayoutCreateInfo textureDescSetLayoutCI{.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO, .pNext = &textureDescSetBindingFlagsCI, .bindingCount = 1, .pBindings = &textureDescSetLayoutBinding};
     vkChk(vkCreateDescriptorSetLayout(device, &textureDescSetLayoutCI, nullptr, &textureDescriptorSetLayout));
 
-    VkDescriptorPoolSize poolSize{.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, .descriptorCount = TextureDescriptorCount};
+    VkDescriptorPoolSize poolSize{.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, .descriptorCount = MaxTextureDescriptors};
     VkDescriptorPoolCreateInfo descPoolCI{.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO, .maxSets = 1, .poolSizeCount = 1, .pPoolSizes = &poolSize};
     vkChk(vkCreateDescriptorPool(device, &descPoolCI, nullptr, &descriptorPool));
 
-    VkDescriptorSetVariableDescriptorCountAllocateInfo variableDescCountAI{.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO, .descriptorSetCount = 1, .pDescriptorCounts = &TextureDescriptorCount};
+    VkDescriptorSetVariableDescriptorCountAllocateInfo variableDescCountAI{.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO, .descriptorSetCount = 1, .pDescriptorCounts = &MaxTextureDescriptors};
     VkDescriptorSetAllocateInfo textureDescSetAI{.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO, .pNext = &variableDescCountAI, .descriptorPool = descriptorPool, .descriptorSetCount = 1, .pSetLayouts = &textureDescriptorSetLayout};
     vkChk(vkAllocateDescriptorSets(device, &textureDescSetAI, &textureDescriptorSet));
 
@@ -409,7 +416,7 @@ FateRenderer::FateRenderer() {
     vkChk(vkCreateShaderModule(device, &fragCI, nullptr, &fragModule));
 
     // Pipeline
-    VkPushConstantRange pushConstantRange{.stageFlags = VK_SHADER_STAGE_VERTEX_BIT, .size = sizeof(VkDeviceAddress)};
+    VkPushConstantRange pushConstantRange{.stageFlags = VK_SHADER_STAGE_VERTEX_BIT, .size = sizeof(VkDeviceAddress) * 2};
     VkPipelineLayoutCreateInfo pipelineLayoutCI{.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO, .setLayoutCount = 1, .pSetLayouts = &textureDescriptorSetLayout, .pushConstantRangeCount = 1, .pPushConstantRanges = &pushConstantRange};
     vkChk(vkCreatePipelineLayout(device, &pipelineLayoutCI, nullptr, &pipelineLayout));
 
@@ -535,6 +542,7 @@ FateRenderer::~FateRenderer() {
         vkDestroySemaphore(device, imageAcquiredSemaphores[i], nullptr);
         vmaDestroyBuffer(allocator, frameGlobalsBuffers[i].buffer, frameGlobalsBuffers[i].allocation);
         vmaDestroyBuffer(allocator, objectDataBuffers[i].buffer, objectDataBuffers[i].allocation);
+        vmaDestroyBuffer(allocator, indirectBuffers[i].buffer, indirectBuffers[i].allocation);
     }
     for (const auto& renderCompleteSemaphore: renderCompleteSemaphores) {
         vkDestroySemaphore(device, renderCompleteSemaphore, nullptr);
@@ -547,12 +555,12 @@ FateRenderer::~FateRenderer() {
     }
     vmaDestroyBuffer(allocator, geometryBuffer, geometryBufferAllocation);
 
-    for (const auto& texture: textures) {
-        // todo figure out how to loop through descriptor set?
-        vkDestroyImageView(device, texture.view, nullptr);
-        vkDestroySampler(device, texture.sampler, nullptr);
-        vmaDestroyImage(allocator, texture.image, texture.allocation);
-    }
+    // todo figure out how to loop through descriptor set?
+    // for (const auto& texture: textures) {
+    //     vkDestroyImageView(device, texture.view, nullptr);
+    //     vkDestroySampler(device, texture.sampler, nullptr);
+    //     vmaDestroyImage(allocator, texture.image, texture.allocation);
+    // }
 
     vkDestroyDescriptorSetLayout(device, textureDescriptorSetLayout, nullptr);
     vkDestroyDescriptorPool(device, descriptorPool, nullptr);
@@ -743,12 +751,12 @@ void FateRenderer::render(const Scene& scene) {
     // }
 #pragma endregion
 
-    // Sync
+    // Wait to acquire next frame image
     vkChk(vkWaitForFences(device, 1, &fences[frameIndex], true, UINT64_MAX));
     vkChk(vkResetFences(device, 1, &fences[frameIndex]));
     vkChkSwapchain(vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, imageAcquiredSemaphores[frameIndex], VK_NULL_HANDLE, &imageIndex));
 
-    // Update buffers
+    // Build frame globals buffer
     frameGlobals.projection = glm::perspective(glm::radians(45.0f), static_cast<float>(windowSize.x) / static_cast<float>(windowSize.y), 0.1f, 32.0f);
     frameGlobals.view = glm::translate(glm::mat4(1.0f), glm::vec3(cameraPosition));
     // for (auto i = 0; i < 3; i++) {
@@ -757,8 +765,29 @@ void FateRenderer::render(const Scene& scene) {
     // }
     std::memcpy(frameGlobalsBuffers[frameIndex].allocationInfo.pMappedData, &frameGlobals, sizeof(FrameGlobals));
 
-    // Build object data buffer
-    // todo
+    // Generate object data & draw commands from meshes
+    std::vector<VkDrawIndexedIndirectCommand> drawCommands; // todo cache
+    for (const auto& object: scene.getObjects()) {
+        for (const auto& mesh: object->getMeshes()) {
+            VkDrawIndexedIndirectCommand command{
+                .indexCount = static_cast<std::uint32_t>(mesh->getIndices().size()),
+                .instanceCount = 1,
+                .firstIndex = mesh->getGPUHandle()->indicesOffset,
+                .vertexOffset = static_cast<std::int32_t>(mesh->getGPUHandle()->verticesOffset),
+                .firstInstance = 0 // todo maybe pass something here
+            };
+            drawCommands.push_back(command);
+
+            ObjectData objectData{
+                .model = object->getTransform().getWorldMatrix(),
+                .albedoIndex = 0 // todo
+            };
+            objectDatas.push_back(objectData);
+        }
+    }
+
+    std::memcpy(indirectBuffers[frameIndex].allocationInfo.pMappedData, drawCommands.data(), drawCommands.size() * sizeof(VkDrawIndexedIndirectCommand));
+    std::memcpy(objectDataBuffers[frameIndex].allocationInfo.pMappedData, objectDatas.data(), objectDatas.size() * sizeof(ObjectData));
 
     // Build command buffer
     auto commandBuffer = commandBuffers[frameIndex];
@@ -831,11 +860,10 @@ void FateRenderer::render(const Scene& scene) {
     VkDeviceSize vOffset{0};
     vkCmdBindVertexBuffers(commandBuffer, 0, 1, &geometryBuffer, &vOffset);
     vkCmdBindIndexBuffer(commandBuffer, geometryBuffer, geometryBufferAllocationInfo.size, VK_INDEX_TYPE_UINT16);
-    // todo two separate ones, one for global, one for object data
-    vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(VkDeviceAddress), &shaderDataBuffers[frameIndex].deviceAddress);
+    vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(VkDeviceAddress), &frameGlobalsBuffers[frameIndex].deviceAddress);
+    vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, sizeof(VkDeviceAddress), sizeof(VkDeviceAddress), &objectDataBuffers[frameIndex].deviceAddress);
 
-    // todo do we want indirect or something here? we gotta build a draw buffer up or something?
-    vkCmdDrawIndexed(commandBuffer, indexCount, 3, 0, 0, 0);
+    vkCmdDrawIndexedIndirect(commandBuffer, indirectBuffers[frameIndex].buffer, 0, static_cast<std::uint32_t>(drawCommands.size()), sizeof(VkDrawIndexedIndirectCommand));
     vkCmdEndRendering(commandBuffer);
 
     VkImageMemoryBarrier2 barrierPresent{
@@ -867,7 +895,6 @@ void FateRenderer::render(const Scene& scene) {
     };
     vkChk(vkQueueSubmit(queue, 1, &submitInfo, fences[frameIndex]));
 
-    frameIndex = (frameIndex + 1) % MaxFramesInFlight;
     VkPresentInfoKHR presentInfo{
         .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
         .waitSemaphoreCount = 1,
@@ -877,6 +904,8 @@ void FateRenderer::render(const Scene& scene) {
         .pImageIndices = &imageIndex
     };
     vkChkSwapchain(vkQueuePresentKHR(queue, &presentInfo));
+
+    frameIndex = (frameIndex + 1) % MaxFramesInFlight;
 }
 
 void FateRenderer::drawEditorUI(const Scene& scene, const double deltaTime) {
