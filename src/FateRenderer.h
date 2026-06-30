@@ -13,21 +13,21 @@
 #include "Mesh.h"
 #include "Scene.h"
 
-struct alignas(16) TransformBuffer {
-    glm::mat4 modelMatrices[];
-};
-
-struct alignas(16) MaterialData {
-    glm::vec4 baseColour;
-    // GLuint64 albedoMapHandle;
-    std::uint32_t mapFlags;
-    float metallic;
-    float roughness;
-};
-
-struct MaterialBuffer {
-    MaterialData materials[];
-};
+// struct alignas(16) TransformBuffer {
+//     glm::mat4 modelMatrices[];
+// };
+//
+// struct alignas(16) MaterialData {
+//     glm::vec4 baseColour;
+//     // GLuint64 albedoMapHandle;
+//     std::uint32_t mapFlags;
+//     float metallic;
+//     float roughness;
+// };
+//
+// struct MaterialBuffer {
+//     MaterialData materials[];
+// };
 
 struct Texture {
     VmaAllocation allocation{VK_NULL_HANDLE};
@@ -36,23 +36,28 @@ struct Texture {
     VkSampler sampler{VK_NULL_HANDLE};
 };
 
-struct ShaderData {
+struct FrameGlobals {
     glm::mat4 projection;
     glm::mat4 view;
-    glm::mat4 model[3];
     glm::vec4 lightPos{0.0f, -10.0f, 10.0f, 0.0f};
-    uint32_t selected{1};
 };
 
-struct ShaderDataBuffer {
+struct ObjectData {
+    glm::mat4 model;
+    std::uint32_t albedoIndex;
+};
+
+struct AllocatedBuffer {
+    VkBuffer buffer{VK_NULL_HANDLE};
     VmaAllocation allocation{VK_NULL_HANDLE};
     VmaAllocationInfo allocationInfo{};
-    VkBuffer buffer{VK_NULL_HANDLE};
     VkDeviceAddress deviceAddress{};
 };
 
 class FateRenderer {
-    static constexpr int GeometryBufferSize = 1024 * 1024 * 128; // 128MiB
+    static constexpr std::uint32_t GeometryBufferSize = 1024 * 1024 * 128; // 128MiB
+    static constexpr std::uint32_t TextureDescriptorCount = 65536;
+    static constexpr std::uint32_t MaxObjects = 65536;
     static constexpr std::uint32_t MaxFramesInFlight{2};
     static constexpr VkFormat FrameImageFormat{VK_FORMAT_B8G8R8A8_SRGB};
 
@@ -61,9 +66,6 @@ class FateRenderer {
     static void vkChk(VkResult result);
 
     void vkChkSwapchain(VkResult result);
-
-    ShaderData shaderData{};
-    std::array<ShaderDataBuffer, MaxFramesInFlight> shaderDataBuffers;
 
     SDL_Window* window;
     VkSurfaceKHR surface{VK_NULL_HANDLE};
@@ -77,21 +79,21 @@ class FateRenderer {
     std::uint32_t queueFamilyIndex{0};
     VkQueue queue{VK_NULL_HANDLE};
 
-    bool updateSwapchain{false};
-    VkSwapchainKHR swapchain{VK_NULL_HANDLE};
-
-    VkCommandPool commandPool{VK_NULL_HANDLE};
-    VkPipeline pipeline{VK_NULL_HANDLE};
-    VkPipelineLayout pipelineLayout{VK_NULL_HANDLE};
-
     VmaAllocator allocator{VK_NULL_HANDLE};
+
+    VkSwapchainKHR swapchain{VK_NULL_HANDLE};
+    bool updateSwapchain{false};
 
     std::vector<VkImage> swapchainImages;
     std::vector<VkImageView> swapchainImageViews;
-
     VkImage depthImage;
     VmaAllocation depthImageAllocation;
     VkImageView depthImageView;
+
+    VkPipeline pipeline{VK_NULL_HANDLE};
+    VkPipelineLayout pipelineLayout{VK_NULL_HANDLE};
+
+    VkCommandPool commandPool{VK_NULL_HANDLE};
     std::array<VkCommandBuffer, MaxFramesInFlight> commandBuffers;
     std::array<VkFence, MaxFramesInFlight> fences;
     std::array<VkSemaphore, MaxFramesInFlight> imageAcquiredSemaphores;
@@ -106,11 +108,12 @@ class FateRenderer {
     VkDescriptorSetLayout textureDescriptorSetLayout{VK_NULL_HANDLE};
     VkDescriptorSet textureDescriptorSet{VK_NULL_HANDLE};
 
-    glm::ivec2 windowSize{};
+    FrameGlobals frameGlobals{};
+    std::vector<ObjectData> objectData{};
+    std::array<AllocatedBuffer, MaxFramesInFlight> frameGlobalsBuffers{};
+    std::array<AllocatedBuffer, MaxFramesInFlight> objectDataBuffers{};
 
-    // todo vulkan: segment back into objects
-    std::array<Texture, 3> textures{};
-    glm::vec3 objectRotations[3]{};
+    glm::ivec2 windowSize{};
 
     glm::dvec3 cameraPosition{2.25f, 1.0f, -6.0f};
     glm::vec3 cameraRotation{0, 35.0f, 0};
