@@ -1,4 +1,5 @@
 #pragma once
+#include <cstdint>
 
 struct TextureData {
     std::uint32_t width;
