@@ -82,7 +82,6 @@ namespace Fate {
         aiString texturePath;
         if (nodeMaterial->GetTexture(textureType, 0, &texturePath) == AI_SUCCESS) {
             std::print("- Found {} texture at {}", aiTextureTypeToString(textureType), texturePath.C_Str());
-            material.mapFlags |= static_cast<std::uint32_t>(MapFlags::HasAlbedoMap);
 
             if (const aiTexture* texture = scene->GetEmbeddedTexture(texturePath.C_Str())) {
                 // is embedded texture
@@ -90,19 +89,32 @@ namespace Fate {
 
                 if (texture->mHeight == 0) {
                     // is compressed texture
-                    std::print(", compressed ({})", texture->achFormatHint);
+                    const std::string_view format = texture->achFormatHint;
+                    std::print(", compressed ({})", format);
 
-                    const auto pngBuffer = reinterpret_cast<const uint8_t *>(texture->pcData);
-                    const std::size_t pngBufferSize = texture->mWidth;
+                    const auto buffer = reinterpret_cast<const uint8_t *>(texture->pcData);
+                    const std::size_t bufferSize = texture->mWidth;
 
-                    std::print(", size {}", FileUtils::prettyBytes(pngBufferSize));
+                    std::print(", size {}", FileUtils::prettyBytes(bufferSize));
+
+                    std::unique_ptr<std::uint8_t[]> decodedData;
 
                     std::uint32_t width, height;
-                    const auto decodedData = FileUtils::decodePng(pngBuffer, pngBufferSize, width, height);
+                    if (format == "png") {
+                        decodedData = FileUtils::decodePng(buffer, bufferSize, width, height);
+                    }
+                    else if (format == "jpg") {
+                        decodedData = FileUtils::decodeJpeg(buffer, bufferSize, width, height);
+                    }
+                    else {
+                        std::println(", unsupported format", format);
+                        return material;
+                    }
 
                     std::print(", dimensions {}x{}\n", width, height);
 
                     material.albedoMap = renderer.uploadTexture({width, height, decodedData.get()});
+                    material.mapFlags |= static_cast<std::uint32_t>(MapFlags::HasAlbedoMap);
                 }
                 else {
                     // is uncompressed texture

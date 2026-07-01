@@ -262,7 +262,7 @@ target_link_libraries(fate PRIVATE assimp)
 FetchContent_Declare(
         wuffs
         GIT_REPOSITORY https://github.com/google/wuffs.git
-        GIT_TAG v0.3.4
+        GIT_TAG v0.4.0-alpha.10
         GIT_SHALLOW TRUE
 )
 
