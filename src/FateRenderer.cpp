@@ -52,7 +52,7 @@ void FateRenderer::vkChkSwapchain(const VkResult result) {
     }
 }
 
-std::vector<std::uint32_t> loadSpirv(const std::filesystem::path& path) {
+std::vector<std::uint32_t> loadShader(const std::filesystem::path& path) {
     std::ifstream file(path, std::ios::ate | std::ios::binary);
 
     if (!file.is_open()) {
@@ -342,10 +342,7 @@ FateRenderer::FateRenderer() {
     vkChk(vkCreateSampler(device, &samplerLinearRepeatCI, nullptr, &samplers.linearRepeat));
 
     // Load shaders
-    // std::vector<std::uint32_t> vertCode{loadSPIRV("lit.slang.spv")};
-    // std::vector<std::uint32_t> fragCode{loadSPIRV("lit.slang.spv")};
-
-    std::vector<std::uint32_t> shaderCode{loadSpirv(PathUtils::getEnginePath() / "resources/Shaders/lit.slang.spv")};
+    std::vector<std::uint32_t> shaderCode{loadShader(PathUtils::getEnginePath() / "resources/Shaders/lit.slang.spv")};
 
     VkShaderModuleCreateInfo shaderCI{
         .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
@@ -354,14 +351,6 @@ FateRenderer::FateRenderer() {
     };
     VkShaderModule shaderModule{};
     vkChk(vkCreateShaderModule(device, &shaderCI, nullptr, &shaderModule));
-
-    // VkShaderModuleCreateInfo fragCI{
-    //     .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-    //     .codeSize = fragCode.size() * sizeof(std::uint32_t),
-    //     .pCode = fragCode.data()
-    // };
-    // VkShaderModule fragModule{};
-    // vkChk(vkCreateShaderModule(device, &fragCI, nullptr, &fragModule));
 
     // Pipeline
     VkPushConstantRange pushConstantRange{.stageFlags = VK_SHADER_STAGE_VERTEX_BIT, .size = sizeof(VkDeviceAddress) * 2};
@@ -374,7 +363,7 @@ FateRenderer::FateRenderer() {
     };
     VkVertexInputBindingDescription vertexBinding{.binding = 0, .stride = sizeof(Vertex), .inputRate = VK_VERTEX_INPUT_RATE_VERTEX};
     std::vector<VkVertexInputAttributeDescription> vertexAttributes{
-        {.location = 0, .binding = 0, .format = VK_FORMAT_R32G32B32_SFLOAT, .offset = offsetof(Vertex, baseColour)},
+        {.location = 0, .binding = 0, .format = VK_FORMAT_R32G32B32A32_SFLOAT, .offset = offsetof(Vertex, baseColour)},
         {.location = 1, .binding = 0, .format = VK_FORMAT_R32G32B32_SFLOAT, .offset = offsetof(Vertex, position)},
         {.location = 2, .binding = 0, .format = VK_FORMAT_R32G32B32_SFLOAT, .offset = offsetof(Vertex, normal)},
         {.location = 3, .binding = 0, .format = VK_FORMAT_R32G32_SFLOAT, .offset = offsetof(Vertex, texCoord)},
@@ -708,11 +697,16 @@ void FateRenderer::render(const Scene& scene) {
     constexpr float camHorFovDegs = 60.0f;
     const float fovYRads = 2.0f * glm::atan(glm::tan(glm::radians(camHorFovDegs) * 0.5f) / winAspect);
     frameGlobals.projection = glm::perspective(fovYRads, winAspect, 0.01f, 100.0f);
+    frameGlobals.projection[1][1] *= -1.0f; // flip Y for Vulkan
     frameGlobals.view = glm::inverse(glm::translate(glm::mat4(1.0f), glm::vec3(cameraPosition)) * glm::mat4_cast(glm::quat(glm::radians(cameraRotation))));
     std::memcpy(frameGlobalsBuffers[frameIndex].allocationInfo.pMappedData, &frameGlobals, sizeof(FrameGlobals));
 
     // Generate object data & draw commands from meshes
     std::vector<VkDrawIndexedIndirectCommand> drawCommands; // todo cache
+    objectDatas.clear();
+
+    std::uint32_t objectIndex = 0;
+
     for (const auto& object: scene.getObjects()) {
         for (const auto& mesh: object->getMeshes()) {
             VkDrawIndexedIndirectCommand command{
@@ -720,13 +714,13 @@ void FateRenderer::render(const Scene& scene) {
                 .instanceCount = 1,
                 .firstIndex = mesh->getGPUHandle()->indicesOffset,
                 .vertexOffset = static_cast<std::int32_t>(mesh->getGPUHandle()->verticesOffset),
-                .firstInstance = 0 // todo maybe pass something here
+                .firstInstance = objectIndex++
             };
             drawCommands.push_back(command);
 
             ObjectData objectData{
                 .model = object->getTransform().getWorldMatrix(),
-                .albedoIndex = 0 // todo
+                .albedoIndex = mesh->getMaterial()->albedoMap ? mesh->getMaterial()->albedoMap->descriptorIndex : 0,
             };
             objectDatas.push_back(objectData);
         }
@@ -734,6 +728,10 @@ void FateRenderer::render(const Scene& scene) {
 
     std::memcpy(indirectBuffers[frameIndex].allocationInfo.pMappedData, drawCommands.data(), drawCommands.size() * sizeof(VkDrawIndexedIndirectCommand));
     std::memcpy(objectDataBuffers[frameIndex].allocationInfo.pMappedData, objectDatas.data(), objectDatas.size() * sizeof(ObjectData));
+
+    vmaFlushAllocation(allocator, frameGlobalsBuffers[frameIndex].allocation, 0, VK_WHOLE_SIZE);
+    vmaFlushAllocation(allocator, indirectBuffers[frameIndex].allocation, 0, VK_WHOLE_SIZE);
+    vmaFlushAllocation(allocator, objectDataBuffers[frameIndex].allocation, 0, VK_WHOLE_SIZE);
 
     // Build command buffer
     auto commandBuffer = commandBuffers[frameIndex];
@@ -775,7 +773,7 @@ void FateRenderer::render(const Scene& scene) {
         .imageLayout = VK_IMAGE_LAYOUT_ATTACHMENT_OPTIMAL,
         .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
         .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-        .clearValue{.color{0.0f, 0.0f, 0.0f, 1.0f}}
+        .clearValue{.color{0.12f, 0.12f, 0.12f, 1.0f}}
     };
     VkRenderingAttachmentInfo depthAttachmentInfo{
         .sType = VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
@@ -1009,6 +1007,9 @@ GPUMeshHandle FateRenderer::uploadMesh(const Mesh& mesh) {
     std::memcpy(static_cast<char *>(vertexBufferAllocationInfo.pMappedData) + vertexOffset, mesh.getVertices().data(), vertexBytes);
     std::memcpy(static_cast<char *>(indexBufferAllocationInfo.pMappedData) + indexOffset, mesh.getIndices().data(), indexBytes);
 
+    vmaFlushAllocation(allocator, vertexBufferAllocation, vertexOffset, vertexBytes);
+    vmaFlushAllocation(allocator, indexBufferAllocation, indexOffset, indexBytes);
+
     return GPUMeshHandle(vertexOffset / sizeof(Vertex), indexOffset / sizeof(std::uint32_t), vertexVirtualAllocation, indexVirtualAllocation);
 }
 
@@ -1131,6 +1132,6 @@ std::unique_ptr<AllocatedTexture> FateRenderer::uploadTexture(const TextureData&
 
     vkUpdateDescriptorSets(device, 1, &descriptorWrite, 0, nullptr);
 
-    allocatedTexture.bindingIndex = bindingIndex;
+    allocatedTexture.descriptorIndex = bindingIndex;
     return std::make_unique<AllocatedTexture>(std::move(allocatedTexture));
 }

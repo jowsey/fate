@@ -23,7 +23,7 @@ struct AllocatedTexture {
     VkImage image{VK_NULL_HANDLE};
     VkImageView view{VK_NULL_HANDLE};
     VmaAllocation allocation{VK_NULL_HANDLE};
-    std::uint32_t bindingIndex{0};
+    std::uint32_t descriptorIndex{0};
 };
 
 struct FrameGlobals {
@@ -53,9 +53,7 @@ class FateRenderer {
     static constexpr std::uint32_t MaxTextureDescriptors = 65536;
     static constexpr std::uint32_t GeometryBuffersSize = 1024 * 1024 * 128; // 128MiB
     static constexpr std::uint32_t MaxFramesInFlight{2};
-    static constexpr VkFormat FrameImageFormat{VK_FORMAT_B8G8R8A8_SRGB};
-
-    // static GLuint loadShader(GLuint type, const std::filesystem::path& path);
+    static constexpr VkFormat FrameImageFormat{VK_FORMAT_B8G8R8A8_UNORM};
 
     static void vkChk(VkResult result);
 
@@ -119,7 +117,7 @@ class FateRenderer {
 
     glm::ivec2 windowSize{};
 
-    glm::dvec3 cameraPosition{2.25f, 1.0f, -6.0f};
+    glm::dvec3 cameraPosition{2.25f, 1.0f, 5.0f};
     glm::vec3 cameraRotation{0, 35.0f, 0};
 
 public:

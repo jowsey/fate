@@ -112,7 +112,7 @@ foreach (SHADER_FILE IN LISTS SHADER_FILES)
     set(SPIRV_OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/dist/resources/Shaders/${SHADER_NAME}.spv")
     add_custom_command(
             OUTPUT "${SPIRV_OUTPUT}"
-#            COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/dist/resources/Shaders"
+            #            COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/dist/resources/Shaders"
             COMMAND ${SLANGC_EXE} "${SHADER_FILE}" -target spirv -o "${SPIRV_OUTPUT}"
             DEPENDS "${SHADER_FILE}" "${RESOURCE_TIMESTAMP}"
             COMMENT "Compiling shader ${SHADER_NAME} to SPIR-V"
@@ -188,6 +188,8 @@ FetchContent_Declare(
         GIT_TAG 1.0.3
         GIT_SHALLOW TRUE
 )
+
+target_compile_definitions(fate PRIVATE GLM_FORCE_DEPTH_ZERO_TO_ONE)
 
 FetchContent_MakeAvailable(glm)
 target_link_libraries(fate PRIVATE glm::glm)
