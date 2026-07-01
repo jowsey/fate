@@ -1,0 +1,146 @@
+#pragma once
+
+#include <vector>
+
+#include "glm/glm.hpp"
+#include "SDL3/SDL.h"
+#include "SDL3/SDL_video.h"
+#include "GPUMeshHandle.h"
+#include "IndexAllocator.h"
+#include "Mesh.h"
+#include "Scene.h"
+#include "TextureData.h"
+
+// struct alignas(16) MaterialData {
+//     glm::vec4 baseColour;
+//     // GLuint64 albedoMapHandle;
+//     std::uint32_t mapFlags;
+//     float metallic;
+//     float roughness;
+// };
+
+namespace Fate {
+    struct AllocatedTexture {
+        VkImage image{VK_NULL_HANDLE};
+        VkImageView view{VK_NULL_HANDLE};
+        VmaAllocation allocation{VK_NULL_HANDLE};
+        std::uint32_t descriptorIndex{0};
+    };
+
+    struct FrameGlobals {
+        glm::mat4 projection;
+        glm::mat4 view;
+        glm::vec4 lightPos{0.0f, -10.0f, 10.0f, 0.0f};
+    };
+
+    struct ObjectData {
+        glm::mat4 model;
+        std::uint32_t albedoIndex;
+    };
+
+    struct AllocatedBuffer {
+        VkBuffer buffer{VK_NULL_HANDLE};
+        VmaAllocation allocation{VK_NULL_HANDLE};
+        VmaAllocationInfo allocationInfo{};
+        VkDeviceAddress deviceAddress{};
+    };
+
+    struct SamplerCollection {
+        VkSampler linearRepeat{VK_NULL_HANDLE};
+    };
+
+    class Renderer {
+        static constexpr std::uint32_t MaxObjects = 65536;
+        static constexpr std::uint32_t MaxTextureDescriptors = 65536;
+        static constexpr std::uint32_t GeometryBuffersSize = 1024 * 1024 * 128; // 128MiB
+        static constexpr std::uint32_t MaxFramesInFlight{2};
+        static constexpr VkFormat FrameImageFormat{VK_FORMAT_B8G8R8A8_UNORM};
+
+        static void vkChk(VkResult result);
+
+        void vkChkSwapchain(VkResult result);
+
+        IndexAllocator textureDescriptorAllocator{MaxTextureDescriptors};
+
+        SDL_Window* window;
+        VkSurfaceKHR surface;
+
+        VkFormat depthImageFormat{VK_FORMAT_UNDEFINED};
+
+        std::uint32_t imageIndex{0};
+        std::uint32_t frameIndex{0};
+
+        VkInstance instance{VK_NULL_HANDLE};
+        VkPhysicalDevice physicalDevice{VK_NULL_HANDLE};
+        VkDevice device{VK_NULL_HANDLE};
+        std::uint32_t queueFamilyIndex{0};
+        VkQueue queue{VK_NULL_HANDLE};
+
+        VmaAllocator allocator{VK_NULL_HANDLE};
+
+        VkSwapchainKHR swapchain{VK_NULL_HANDLE};
+
+        std::vector<VkImage> swapchainImages;
+        std::vector<VkImageView> swapchainImageViews;
+        VkImage depthImage;
+        VmaAllocation depthImageAllocation;
+        VkImageView depthImageView;
+
+        SamplerCollection samplers{};
+
+        VkPipeline pipeline{VK_NULL_HANDLE};
+        VkPipelineLayout pipelineLayout{VK_NULL_HANDLE};
+
+        VkCommandPool commandPool{VK_NULL_HANDLE};
+        std::array<VkCommandBuffer, MaxFramesInFlight> commandBuffers;
+        std::array<VkFence, MaxFramesInFlight> fences;
+        std::array<VkSemaphore, MaxFramesInFlight> imageAcquiredSemaphores;
+        std::vector<VkSemaphore> renderCompleteSemaphores;
+
+        VkBuffer vertexBuffer{VK_NULL_HANDLE};
+        VmaAllocation vertexBufferAllocation{VK_NULL_HANDLE};
+        VmaAllocationInfo vertexBufferAllocationInfo{};
+        VmaVirtualBlock vertexVirtualBlock{VK_NULL_HANDLE};
+
+        VkBuffer indexBuffer{VK_NULL_HANDLE};
+        VmaAllocation indexBufferAllocation{VK_NULL_HANDLE};
+        VmaAllocationInfo indexBufferAllocationInfo{};
+        VmaVirtualBlock indexVirtualBlock{VK_NULL_HANDLE};
+
+        VkDescriptorPool descriptorPool{VK_NULL_HANDLE};
+        VkDescriptorSetLayout textureDescriptorSetLayout{VK_NULL_HANDLE};
+        VkDescriptorSet textureDescriptorSet{VK_NULL_HANDLE};
+
+        FrameGlobals frameGlobals{};
+        std::vector<ObjectData> objectDatas{}; // todo bad naming
+        std::array<AllocatedBuffer, MaxFramesInFlight> frameGlobalsBuffers{};
+        std::array<AllocatedBuffer, MaxFramesInFlight> objectDataBuffers{};
+        std::array<AllocatedBuffer, MaxFramesInFlight> indirectBuffers{};
+
+        std::vector<std::unique_ptr<AllocatedTexture>> allocatedTextures{};
+        VkShaderModule shaderModule{VK_NULL_HANDLE};
+
+        glm::ivec2 windowSize{};
+
+        glm::dvec3 cameraPosition{2.25f, 1.0f, 5.0f};
+        glm::vec3 cameraRotation{0, 35.0f, 0};
+
+    public:
+        Renderer();
+
+        ~Renderer();
+
+        void buildEditorUI(const Scene& scene, double deltaTime);
+
+        void render(const Scene& scene);
+
+        [[nodiscard]] SDL_Window* getWindow() const { return window; }
+
+        GPUMeshHandle uploadMesh(const Mesh& mesh);
+
+        AllocatedTexture* uploadTexture(const TextureData& data);
+
+        // todo this should be way more explicit
+        bool updateSwapchain{false};
+    };
+}

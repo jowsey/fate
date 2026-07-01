@@ -17,7 +17,7 @@
 #define WUFFS_CONFIG__MODULE__ZLIB
 #include "wuffs-v0.3.c"
 
-namespace FileUtils {
+namespace Fate::FileUtils {
     std::string prettyBytes(const std::size_t bytes) {
         constexpr std::array<std::string_view, 5> units = {"B", "KB", "MB", "GB", "TB"};
         auto size = static_cast<double>(bytes);

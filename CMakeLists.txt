@@ -23,10 +23,10 @@ add_executable(fate
         src/utils/Paths.h
         src/utils/Files.cpp
         src/utils/Files.h
-        src/FateEngine.cpp
-        src/FateEngine.h
-        src/FateRenderer.cpp
-        src/FateRenderer.h
+        src/Engine.cpp
+        src/Engine.h
+        src/Renderer.cpp
+        src/Renderer.h
         src/GPUMeshHandle.h
         src/main.cpp
         src/Material.h
