@@ -14,7 +14,7 @@ struct Material {
     float roughness;
 
     // todo this is horrible and needs to die, see Mesh.h
-    std::unique_ptr<AllocatedTexture> albedoMap;
+    AllocatedTexture* albedoMap{};
 
     std::uint32_t mapFlags{static_cast<std::uint32_t>(MapFlags::None)};
     bool useAlpha{false};

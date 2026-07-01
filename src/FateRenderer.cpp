@@ -349,7 +349,6 @@ FateRenderer::FateRenderer() {
         .codeSize = shaderCode.size() * sizeof(std::uint32_t),
         .pCode = shaderCode.data()
     };
-    VkShaderModule shaderModule{};
     vkChk(vkCreateShaderModule(device, &shaderCI, nullptr, &shaderModule));
 
     // Pipeline
@@ -483,6 +482,7 @@ FateRenderer::~FateRenderer() {
         vmaDestroyBuffer(allocator, objectDataBuffers[i].buffer, objectDataBuffers[i].allocation);
         vmaDestroyBuffer(allocator, indirectBuffers[i].buffer, indirectBuffers[i].allocation);
     }
+
     for (const auto& renderCompleteSemaphore: renderCompleteSemaphores) {
         vkDestroySemaphore(device, renderCompleteSemaphore, nullptr);
     }
@@ -492,15 +492,21 @@ FateRenderer::~FateRenderer() {
     for (const auto& swapchainImageView: swapchainImageViews) {
         vkDestroyImageView(device, swapchainImageView, nullptr);
     }
-    vmaDestroyBuffer(allocator, vertexBuffer, vertexBufferAllocation);
 
-    // todo loop through active meshes with AllocatedTexture handles? or RAII type shit?
-    // for (const auto& texture: textures) {
-    //     vkDestroyImageView(device, texture.view, nullptr);
-    //     vkDestroySampler(device, texture.sampler, nullptr);
-    //     vmaDestroyImage(allocator, texture.image, texture.allocation);
-    // }
+    for (const auto& allocatedTexture: allocatedTextures) {
+        vkDestroyImageView(device, allocatedTexture->view, nullptr);
+        vmaDestroyImage(allocator, allocatedTexture->image, allocatedTexture->allocation);
+    }
+
     vkDestroySampler(device, samplers.linearRepeat, nullptr);
+
+    vmaDestroyBuffer(allocator, vertexBuffer, vertexBufferAllocation);
+    vertexVirtualBlock->Clear();
+    vmaDestroyVirtualBlock(vertexVirtualBlock);
+
+    vmaDestroyBuffer(allocator, indexBuffer, indexBufferAllocation);
+    indexVirtualBlock->Clear();
+    vmaDestroyVirtualBlock(indexVirtualBlock);
 
     vkDestroyDescriptorSetLayout(device, textureDescriptorSetLayout, nullptr);
     vkDestroyDescriptorPool(device, descriptorPool, nullptr);
@@ -509,12 +515,17 @@ FateRenderer::~FateRenderer() {
     vkDestroySwapchainKHR(device, swapchain, nullptr);
     vkDestroySurfaceKHR(instance, surface, nullptr);
     vkDestroyCommandPool(device, commandPool, nullptr);
-    // vkDestroyShaderModule(device, vertModule, nullptr);
-    // vkDestroyShaderModule(device, fragModule, nullptr); // todo vulkan: hook up to idk
+    vkDestroyShaderModule(device, shaderModule, nullptr);
     vmaDestroyAllocator(allocator);
+
+    ImGui_ImplVulkan_Shutdown();
+    ImGui_ImplSDL3_Shutdown();
+    ImGui::DestroyContext();
+
     SDL_DestroyWindow(window);
     SDL_QuitSubSystem(SDL_INIT_VIDEO);
     SDL_Quit();
+
     vkDestroyDevice(device, nullptr);
     vkDestroyInstance(instance, nullptr);
 }
@@ -1013,7 +1024,7 @@ GPUMeshHandle FateRenderer::uploadMesh(const Mesh& mesh) {
     return GPUMeshHandle(vertexOffset / sizeof(Vertex), indexOffset / sizeof(std::uint32_t), vertexVirtualAllocation, indexVirtualAllocation);
 }
 
-std::unique_ptr<AllocatedTexture> FateRenderer::uploadTexture(const TextureData& data) {
+AllocatedTexture* FateRenderer::uploadTexture(const TextureData& data) {
     const auto pixelsSize = data.width * data.height * 4;
     std::println("Uploading texture of size {}x{} ({})", data.width, data.height, FileUtils::prettyBytes(pixelsSize));
 
@@ -1116,22 +1127,31 @@ std::unique_ptr<AllocatedTexture> FateRenderer::uploadTexture(const TextureData&
     vkChk(vkWaitForFences(device, 1, &fence, VK_TRUE, UINT64_MAX));
 
     vkDestroyFence(device, fence, nullptr);
+    vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
     vmaDestroyBuffer(allocator, imgSrcBuffer, imgSrcAllocation);
 
     std::uint32_t bindingIndex = textureDescriptorAllocator.getNext(); // todo free when unloading texture
+    allocatedTexture.descriptorIndex = bindingIndex;
+
     VkDescriptorImageInfo textureImageInfo{.sampler = samplers.linearRepeat, .imageView = allocatedTexture.view, .imageLayout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL};
     VkWriteDescriptorSet descriptorWrite{
         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
         .dstSet = textureDescriptorSet,
         .dstBinding = 0,
-        .dstArrayElement = bindingIndex,
+        .dstArrayElement = allocatedTexture.descriptorIndex,
         .descriptorCount = 1,
         .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
         .pImageInfo = &textureImageInfo
     };
-
     vkUpdateDescriptorSets(device, 1, &descriptorWrite, 0, nullptr);
 
-    allocatedTexture.descriptorIndex = bindingIndex;
-    return std::make_unique<AllocatedTexture>(std::move(allocatedTexture));
+    // don't need to resize if using a recycled/freed index
+    if (bindingIndex >= allocatedTextures.size()) {
+        allocatedTextures.resize(bindingIndex + 1);
+    }
+
+    auto uptr = std::make_unique<AllocatedTexture>(allocatedTexture);
+    allocatedTextures[bindingIndex] = std::move(uptr);
+
+    return allocatedTextures[bindingIndex].get();
 }

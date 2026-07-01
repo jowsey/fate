@@ -115,6 +115,9 @@ class FateRenderer {
     std::array<AllocatedBuffer, MaxFramesInFlight> objectDataBuffers{};
     std::array<AllocatedBuffer, MaxFramesInFlight> indirectBuffers{};
 
+    std::vector<std::unique_ptr<AllocatedTexture>> allocatedTextures{};
+    VkShaderModule shaderModule{VK_NULL_HANDLE};
+
     glm::ivec2 windowSize{};
 
     glm::dvec3 cameraPosition{2.25f, 1.0f, 5.0f};
@@ -135,5 +138,5 @@ public:
 
     GPUMeshHandle uploadMesh(const Mesh& mesh);
 
-    std::unique_ptr<AllocatedTexture> uploadTexture(const TextureData& data);
+    AllocatedTexture* uploadTexture(const TextureData& data);
 };
