@@ -69,10 +69,10 @@ if (CMAKE_BUILD_TYPE STREQUAL "Release")
     target_link_options(fate PRIVATE -Wl,--gc-sections)
 
     # glm SIMD support
-    target_compile_definitions(fate PRIVATE
-            GLM_FORCE_INTRINSICS
-            GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
-    )
+#    target_compile_definitions(fate PRIVATE
+#            GLM_FORCE_INTRINSICS
+#            GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
+#    )
 
     # link-time optimization
     include(CheckIPOSupported)
