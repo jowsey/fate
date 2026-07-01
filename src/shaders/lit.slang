@@ -29,20 +29,20 @@ struct VSOutput
     float3 Factor;
     float3 LightVec;
     float3 ViewVec;
-    uint32_t InstanceIndex;
+    uint32_t albedoIndex;
 };
 
 [shader("vertex")]
 VSOutput vertexMain(VSInput input, uniform FrameGlobals *globals, uniform ObjectData *objects, uint instanceIndex: SV_VulkanInstanceID)
 {
-    VSOutput output;
+    VSOutput output; 
     float4x4 modelMat = objects[instanceIndex].model;
 
     output.normal = mul((float3x3)mul(globals->view, modelMat), input.normal);
     output.uv = input.uv;
     output.position = mul(globals->projection, mul(globals->view, mul(modelMat, float4(input.position.xyz, 1.0))));
     output.Factor = 1.0f;
-    output.InstanceIndex = instanceIndex;
+    output.albedoIndex = objects[instanceIndex].albedoIndex;
 
     // Calculate view vectors required for lighting
     float4 fragPos = mul(mul(globals->view, modelMat), float4(input.position.xyz, 1.0));
@@ -63,6 +63,6 @@ float4 fragmentMain(VSOutput input)
     float3 specular = pow(max(dot(R, V), 0.0), 16.0) * 0.75;
 
     // Sample from texture
-    float3 color = textures[NonUniformResourceIndex(input.InstanceIndex)].Sample(input.uv).rgb * input.Factor;
+    float3 color = textures[NonUniformResourceIndex(input.albedoIndex)].Sample(input.uv).rgb * input.Factor;
     return float4(diffuse * color.rgb + specular, 1.0);
 }
