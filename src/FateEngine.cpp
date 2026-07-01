@@ -35,8 +35,8 @@ void FateEngine::run() {
         deltaTime = currentTime - lastTime;
         lastTime = currentTime;
 
+        renderer.buildEditorUI(*activeScene, deltaTime);
         renderer.render(*activeScene);
-        renderer.drawEditorUI(*activeScene, deltaTime);
         renderer.endRender();
     }
 }
