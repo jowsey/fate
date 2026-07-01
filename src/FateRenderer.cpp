@@ -12,6 +12,8 @@
 #define VMA_IMPLEMENTATION
 #include "vk_mem_alloc.h"
 
+#include "vulkan/vk_enum_string_helper.h"
+
 #include "glm/glm.hpp"
 #include "glm/gtc/matrix_transform.hpp"
 #include "glm/gtc/quaternion.hpp"
@@ -29,8 +31,6 @@
 #include "Scene.h"
 #include "utils/Files.h"
 #include "utils/Paths.h"
-
-#include "vulkan/vk_enum_string_helper.h"
 
 void FateRenderer::vkChk(const VkResult result) {
     if (result != VK_SUCCESS) {
@@ -210,24 +210,29 @@ FateRenderer::FateRenderer() {
         .presentMode = VK_PRESENT_MODE_FIFO_KHR
     };
     vkChk(vkCreateSwapchainKHR(device, &swapchainCI, nullptr, &swapchain));
-    std::uint32_t imageCount{0};
-    vkChk(vkGetSwapchainImagesKHR(device, swapchain, &imageCount, nullptr));
-    swapchainImages.resize(imageCount);
-    vkChk(vkGetSwapchainImagesKHR(device, swapchain, &imageCount, swapchainImages.data()));
-    swapchainImageViews.resize(imageCount);
-    for (auto i = 0; i < imageCount; i++) {
-        VkImageViewCreateInfo viewCI{.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO, .image = swapchainImages[i], .viewType = VK_IMAGE_VIEW_TYPE_2D, .format = FrameImageFormat, .subresourceRange{.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .levelCount = 1, .layerCount = 1}};
+    std::uint32_t swapchainImageCount{0};
+    vkChk(vkGetSwapchainImagesKHR(device, swapchain, &swapchainImageCount, nullptr));
+    swapchainImages.resize(swapchainImageCount);
+    vkChk(vkGetSwapchainImagesKHR(device, swapchain, &swapchainImageCount, swapchainImages.data()));
+    swapchainImageViews.resize(swapchainImageCount);
+    for (auto i = 0; i < swapchainImageCount; i++) {
+        VkImageViewCreateInfo viewCI{
+            .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+            .image = swapchainImages[i],
+            .viewType = VK_IMAGE_VIEW_TYPE_2D,
+            .format = FrameImageFormat,
+            .subresourceRange{.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .levelCount = 1, .layerCount = 1}
+        };
         vkChk(vkCreateImageView(device, &viewCI, nullptr, &swapchainImageViews[i]));
     }
 
     // Depth attachment
-    std::vector<VkFormat> depthFormatList{VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT};
-    VkFormat depthFormat{VK_FORMAT_UNDEFINED};
-    for (VkFormat& format: depthFormatList) {
+    std::vector<VkFormat> idealDepthFormats{VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT};
+    for (VkFormat& idealFormat: idealDepthFormats) {
         VkFormatProperties2 formatProperties{.sType = VK_STRUCTURE_TYPE_FORMAT_PROPERTIES_2};
-        vkGetPhysicalDeviceFormatProperties2(physicalDevice, format, &formatProperties);
+        vkGetPhysicalDeviceFormatProperties2(physicalDevice, idealFormat, &formatProperties);
         if (formatProperties.formatProperties.optimalTilingFeatures & VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT) {
-            depthFormat = format;
+            depthImageFormat = idealFormat;
             break;
         }
     }
@@ -235,7 +240,7 @@ FateRenderer::FateRenderer() {
     VkImageCreateInfo depthImageCI{
         .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         .imageType = VK_IMAGE_TYPE_2D,
-        .format = depthFormat,
+        .format = depthImageFormat,
         .extent{.width = static_cast<std::uint32_t>(windowSize.x), .height = static_cast<std::uint32_t>(windowSize.y), .depth = 1},
         .mipLevels = 1,
         .arrayLayers = 1,
@@ -246,7 +251,7 @@ FateRenderer::FateRenderer() {
     };
     VmaAllocationCreateInfo allocCI{.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT, .usage = VMA_MEMORY_USAGE_AUTO};
     vkChk(vmaCreateImage(allocator, &depthImageCI, &allocCI, &depthImage, &depthImageAllocation, nullptr));
-    VkImageViewCreateInfo depthViewCI{.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO, .image = depthImage, .viewType = VK_IMAGE_VIEW_TYPE_2D, .format = depthFormat, .subresourceRange{.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT, .levelCount = 1, .layerCount = 1}};
+    VkImageViewCreateInfo depthViewCI{.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO, .image = depthImage, .viewType = VK_IMAGE_VIEW_TYPE_2D, .format = depthImageFormat, .subresourceRange{.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT, .levelCount = 1, .layerCount = 1}};
     vkChk(vkCreateImageView(device, &depthViewCI, nullptr, &depthImageView));
 
     // Geometry buffers
@@ -383,7 +388,7 @@ FateRenderer::FateRenderer() {
     VkPipelineDepthStencilStateCreateInfo depthStencilState{.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO, .depthTestEnable = VK_TRUE, .depthWriteEnable = VK_TRUE, .depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL};
     VkPipelineColorBlendAttachmentState blendAttachment{.colorWriteMask = 0xF};
     VkPipelineColorBlendStateCreateInfo colorBlendState{.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO, .attachmentCount = 1, .pAttachments = &blendAttachment};
-    VkPipelineRenderingCreateInfo renderingCI{.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO, .colorAttachmentCount = 1, .pColorAttachmentFormats = &FrameImageFormat, .depthAttachmentFormat = depthFormat};
+    VkPipelineRenderingCreateInfo renderingCI{.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO, .colorAttachmentCount = 1, .pColorAttachmentFormats = &FrameImageFormat, .depthAttachmentFormat = depthImageFormat};
     VkGraphicsPipelineCreateInfo pipelineCI{
         .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
         .pNext = &renderingCI,
@@ -455,7 +460,7 @@ FateRenderer::FateRenderer() {
                 .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
                 .colorAttachmentCount = 1,
                 .pColorAttachmentFormats = &FrameImageFormat,
-                .depthAttachmentFormat = depthFormat
+                .depthAttachmentFormat = depthImageFormat
             }
         },
         .UseDynamicRendering = true,
@@ -555,6 +560,90 @@ void DrawSceneHierarchyNode(SceneTransform& transform) {
 
         ImGui::TreePop();
     }
+}
+
+void FateRenderer::buildEditorUI(const Scene& scene, const double deltaTime) {
+    ImGui_ImplVulkan_NewFrame();
+    ImGui_ImplSDL3_NewFrame();
+    ImGui::NewFrame();
+
+    if (ImGui::BeginMainMenuBar()) {
+        if (ImGui::BeginMenu("File")) {
+            if (ImGui::MenuItem("Exit")) {
+                SDL_Event quitEvent;
+                quitEvent.type = SDL_EVENT_QUIT;
+                SDL_PushEvent(&quitEvent);
+            }
+
+            ImGui::EndMenu();
+        }
+
+        if (ImGui::BeginMenu("Help")) {
+            if (ImGui::MenuItem("View on GitHub")) {
+                PathUtils::openBrowser("https://github.com/jowsey/fate");
+            }
+
+            ImGui::Separator();
+
+            ImGui::MenuItem("the Fate game engine", nullptr, nullptr, false);
+            ImGui::MenuItem("v" FATE_VERSION, nullptr, nullptr, false);
+
+            ImGui::EndMenu();
+        }
+
+        static std::deque<double> deltaTimeBuffer{};
+        if (deltaTimeBuffer.size() >= 30) {
+            deltaTimeBuffer.pop_front();
+        }
+        deltaTimeBuffer.push_back(deltaTime);
+
+        const double averageDeltaTime = deltaTimeBuffer.empty()
+                                            ? 0.0
+                                            : std::accumulate(deltaTimeBuffer.begin(), deltaTimeBuffer.end(), 0.0) / deltaTimeBuffer.size();
+
+        const std::string fpsString = std::format("{:.3} fps", 1.0 / averageDeltaTime);
+        const float fpsSize = ImGui::CalcTextSize(fpsString.c_str()).x;
+        ImGui::SetCursorPosX(ImGui::GetWindowWidth() - fpsSize - 8.0f);
+        ImGui::TextUnformatted(fpsString.c_str());
+
+        ImGui::EndMainMenuBar();
+    }
+
+    ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
+
+    ImGui::Begin("Debug");
+
+    ImGui::DragScalarN("Camera position", ImGuiDataType_Double, &cameraPosition, 3, 0.01f);
+    ImGui::DragFloat3("Camera rotation", &cameraRotation.x, 0.01f);
+
+    if (ImGui::CollapsingHeader("Hierarchy", nullptr, ImGuiTreeNodeFlags_DefaultOpen)) {
+        for (SceneObject* object: scene.getObjects()) {
+            if (object->getTransform().getParent() != nullptr) continue;
+            DrawSceneHierarchyNode(object->getTransform());
+        }
+    }
+
+    // if (ImGui::CollapsingHeader("Resource usage", nullptr, ImGuiTreeNodeFlags_DefaultOpen)) {
+    //     ImGui::ProgressBar(
+    //         static_cast<float>(vboOffset) / DefaultBufferSize,
+    //         ImVec2(-1.0f, 0.0f),
+    //         std::format("VBO usage: {} ({:.5f}%)", FileUtils::prettyBytes(vboOffset), static_cast<float>(vboOffset) / DefaultBufferSize * 100.0f).c_str()
+    //     );
+    //
+    //     ImGui::ProgressBar(
+    //         static_cast<float>(eboOffset) / DefaultBufferSize,
+    //         ImVec2(-1.0f, 0.0f),
+    //         std::format("EBO usage: {} ({:.5f}%)", FileUtils::prettyBytes(eboOffset), static_cast<float>(eboOffset) / DefaultBufferSize * 100.0f).c_str()
+    //     );
+    //
+    //     ImGui::ProgressBar(
+    //         0.0f,
+    //         ImVec2(-1.0f, 0.0f),
+    //         std::format("Texture usage: {}", FileUtils::prettyBytes(textureUploadedBytes)).c_str()
+    //     );
+    // }
+
+    ImGui::End();
 }
 
 void FateRenderer::render(const Scene& scene) {
@@ -866,133 +955,88 @@ void FateRenderer::render(const Scene& scene) {
     vkChkSwapchain(vkQueuePresentKHR(queue, &presentInfo));
 
     frameIndex = (frameIndex + 1) % MaxFramesInFlight;
-}
 
-void FateRenderer::buildEditorUI(const Scene& scene, const double deltaTime) {
-    ImGui_ImplVulkan_NewFrame();
-    ImGui_ImplSDL3_NewFrame();
-    ImGui::NewFrame();
+    // Update swapchain if necessary
+    if (updateSwapchain) {
+        updateSwapchain = false;
 
-    if (ImGui::BeginMainMenuBar()) {
-        if (ImGui::BeginMenu("File")) {
-            if (ImGui::MenuItem("Exit")) {
-                SDL_Event quitEvent;
-                quitEvent.type = SDL_EVENT_QUIT;
-                SDL_PushEvent(&quitEvent);
-            }
+        VkSurfaceCapabilitiesKHR surfaceCapabilities;
 
-            ImGui::EndMenu();
+        vkChk(vkDeviceWaitIdle(device));
+        vkChk(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, &surfaceCapabilities));
+
+        SDL_GetWindowSize(window, &windowSize.x, &windowSize.y);
+
+        // todo abstract into method + DRY constructor, maybe see if we can run this whole method in constructor too?
+        VkSwapchainCreateInfoKHR swapchainCI{
+            .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+            .surface = surface,
+            .minImageCount = surfaceCapabilities.minImageCount,
+            .imageFormat = FrameImageFormat,
+            .imageColorSpace = VK_COLORSPACE_SRGB_NONLINEAR_KHR,
+            .imageExtent{.width = static_cast<std::uint32_t>(windowSize.x), .height = static_cast<std::uint32_t>(windowSize.y)},
+            .imageArrayLayers = 1,
+            .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+            .preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR,
+            .compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
+            .presentMode = VK_PRESENT_MODE_FIFO_KHR,
+            .oldSwapchain = swapchain,
+        };
+
+        vkChk(vkCreateSwapchainKHR(device, &swapchainCI, nullptr, &swapchain));
+        for (auto i = 0; i < swapchainImageViews.size(); i++) {
+            vkDestroyImageView(device, swapchainImageViews[i], nullptr);
         }
 
-        if (ImGui::BeginMenu("Help")) {
-            if (ImGui::MenuItem("View on GitHub")) {
-                PathUtils::openBrowser("https://github.com/jowsey/fate");
-            }
+        std::uint32_t swapchainImageCount{0};
+        vkChk(vkGetSwapchainImagesKHR(device, swapchain, &swapchainImageCount, nullptr));
+        swapchainImages.resize(swapchainImageCount);
+        vkChk(vkGetSwapchainImagesKHR(device, swapchain, &swapchainImageCount, swapchainImages.data()));
+        swapchainImageViews.resize(swapchainImageCount);
 
-            ImGui::Separator();
-
-            ImGui::MenuItem("the Fate game engine", nullptr, nullptr, false);
-            ImGui::MenuItem("v" FATE_VERSION, nullptr, nullptr, false);
-
-            ImGui::EndMenu();
+        for (auto i = 0; i < swapchainImageCount; i++) {
+            VkImageViewCreateInfo viewCI{
+                .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+                .image = swapchainImages[i],
+                .viewType = VK_IMAGE_VIEW_TYPE_2D,
+                .format = FrameImageFormat,
+                .subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .levelCount = 1, .layerCount = 1}
+            };
+            vkChk(vkCreateImageView(device, &viewCI, nullptr, &swapchainImageViews[i]));
         }
 
-        static std::deque<double> deltaTimeBuffer{};
-        if (deltaTimeBuffer.size() >= 30) {
-            deltaTimeBuffer.pop_front();
+        for (auto& semaphore: renderCompleteSemaphores) {
+            vkDestroySemaphore(device, semaphore, nullptr);
         }
-        deltaTimeBuffer.push_back(deltaTime);
+        renderCompleteSemaphores.resize(swapchainImageCount);
+        VkSemaphoreCreateInfo semaphoreCI{.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
+        for (auto& semaphore: renderCompleteSemaphores) {
+            vkChk(vkCreateSemaphore(device, &semaphoreCI, nullptr, &semaphore));
+        }
 
-        const double averageDeltaTime = deltaTimeBuffer.empty()
-                                            ? 0.0
-                                            : std::accumulate(deltaTimeBuffer.begin(), deltaTimeBuffer.end(), 0.0) / deltaTimeBuffer.size();
+        vkDestroySwapchainKHR(device, swapchainCI.oldSwapchain, nullptr);
+        vmaDestroyImage(allocator, depthImage, depthImageAllocation);
+        vkDestroyImageView(device, depthImageView, nullptr);
 
-        const std::string fpsString = std::format("{:.3} fps", 1.0 / averageDeltaTime);
-        const float fpsSize = ImGui::CalcTextSize(fpsString.c_str()).x;
-        ImGui::SetCursorPosX(ImGui::GetWindowWidth() - fpsSize - 8.0f);
-        ImGui::TextUnformatted(fpsString.c_str());
+        VkImageCreateInfo depthImageCI{
+            .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+            .imageType = VK_IMAGE_TYPE_2D,
+            .format = depthImageFormat,
+            .extent{.width = static_cast<uint32_t>(windowSize.x), .height = static_cast<uint32_t>(windowSize.y), .depth = 1},
+            .mipLevels = 1,
+            .arrayLayers = 1,
+            .samples = VK_SAMPLE_COUNT_1_BIT,
+            .tiling = VK_IMAGE_TILING_OPTIMAL,
+            .usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+            .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+        };
 
-        ImGui::EndMainMenuBar();
+        depthImageCI.extent = {.width = static_cast<uint32_t>(windowSize.x), .height = static_cast<uint32_t>(windowSize.y), .depth = 1};
+        constexpr VmaAllocationCreateInfo allocCI{.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT, .usage = VMA_MEMORY_USAGE_AUTO};
+        vkChk(vmaCreateImage(allocator, &depthImageCI, &allocCI, &depthImage, &depthImageAllocation, nullptr));
+        VkImageViewCreateInfo viewCI{.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO, .image = depthImage, .viewType = VK_IMAGE_VIEW_TYPE_2D, .format = depthImageFormat, .subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT, .levelCount = 1, .layerCount = 1}};
+        vkChk(vkCreateImageView(device, &viewCI, nullptr, &depthImageView));
     }
-
-    ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
-
-    ImGui::Begin("Debug");
-
-    ImGui::DragScalarN("Camera position", ImGuiDataType_Double, &cameraPosition, 3, 0.01f);
-    ImGui::DragFloat3("Camera rotation", &cameraRotation.x, 0.01f);
-
-    if (ImGui::CollapsingHeader("Hierarchy", nullptr, ImGuiTreeNodeFlags_DefaultOpen)) {
-        for (SceneObject* object: scene.getObjects()) {
-            if (object->getTransform().getParent() != nullptr) continue;
-            DrawSceneHierarchyNode(object->getTransform());
-        }
-    }
-
-    // if (ImGui::CollapsingHeader("Resource usage", nullptr, ImGuiTreeNodeFlags_DefaultOpen)) {
-    //     ImGui::ProgressBar(
-    //         static_cast<float>(vboOffset) / DefaultBufferSize,
-    //         ImVec2(-1.0f, 0.0f),
-    //         std::format("VBO usage: {} ({:.5f}%)", FileUtils::prettyBytes(vboOffset), static_cast<float>(vboOffset) / DefaultBufferSize * 100.0f).c_str()
-    //     );
-    //
-    //     ImGui::ProgressBar(
-    //         static_cast<float>(eboOffset) / DefaultBufferSize,
-    //         ImVec2(-1.0f, 0.0f),
-    //         std::format("EBO usage: {} ({:.5f}%)", FileUtils::prettyBytes(eboOffset), static_cast<float>(eboOffset) / DefaultBufferSize * 100.0f).c_str()
-    //     );
-    //
-    //     ImGui::ProgressBar(
-    //         0.0f,
-    //         ImVec2(-1.0f, 0.0f),
-    //         std::format("Texture usage: {}", FileUtils::prettyBytes(textureUploadedBytes)).c_str()
-    //     );
-    // }
-
-    ImGui::End();
-}
-
-void FateRenderer::endRender() {
-    // todo trigger more explicitly?
-    // if (updateSwapchain) {
-    //     updateSwapchain = false;
-    //     vkChk(vkDeviceWaitIdle(device));
-    //     vkChk(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, &surfaceCaps));
-    //
-    //     SDL_GetWindowSize(window, &windowSize.x, &windowSize.y);
-    //
-    //     swapchainCI.oldSwapchain = swapchain;
-    //     swapchainCI.imageExtent = {.width = static_cast<uint32_t>(windowSize.x), .height = static_cast<uint32_t>(windowSize.y)};
-    //     vkChk(vkCreateSwapchainKHR(device, &swapchainCI, nullptr, &swapchain));
-    //     for (auto i = 0; i < imageCount; i++) {
-    //         vkDestroyImageView(device, swapchainImageViews[i], nullptr);
-    //     }
-    //     vkChk(vkGetSwapchainImagesKHR(device, swapchain, &imageCount, nullptr));
-    //     swapchainImages.resize(imageCount);
-    //     vkChk(vkGetSwapchainImagesKHR(device, swapchain, &imageCount, swapchainImages.data()));
-    //     swapchainImageViews.resize(imageCount);
-    //     for (auto i = 0; i < imageCount; i++) {
-    //         VkImageViewCreateInfo viewCI{.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO, .image = swapchainImages[i], .viewType = VK_IMAGE_VIEW_TYPE_2D, .format = FrameImageFormat, .subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .levelCount = 1, .layerCount = 1}};
-    //         vkChk(vkCreateImageView(device, &viewCI, nullptr, &swapchainImageViews[i]));
-    //     }
-    //     for (auto& semaphore: renderCompleteSemaphores) {
-    //         vkDestroySemaphore(device, semaphore, nullptr);
-    //     }
-    //     renderCompleteSemaphores.resize(imageCount);
-    //     for (auto& semaphore: renderCompleteSemaphores) {
-    //         vkChk(vkCreateSemaphore(device, &semaphoreCI, nullptr, &semaphore));
-    //     }
-    //
-    //     vkDestroySwapchainKHR(device, swapchainCI.oldSwapchain, nullptr);
-    //     vmaDestroyImage(allocator, depthImage, depthImageAllocation);
-    //     vkDestroyImageView(device, depthImageView, nullptr);
-    //
-    //     depthImageCI.extent = {.width = static_cast<uint32_t>(windowSize.x), .height = static_cast<uint32_t>(windowSize.y), .depth = 1};
-    //     const VmaAllocationCreateInfo allocCI{.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT, .usage = VMA_MEMORY_USAGE_AUTO};
-    //     vkChk(vmaCreateImage(allocator, &depthImageCI, &allocCI, &depthImage, &depthImageAllocation, nullptr));
-    //     VkImageViewCreateInfo viewCI{.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO, .image = depthImage, .viewType = VK_IMAGE_VIEW_TYPE_2D, .format = depthFormat, .subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT, .levelCount = 1, .layerCount = 1}};
-    //     vkChk(vkCreateImageView(device, &viewCI, nullptr, &depthImageView));
-    // }
 }
 
 GPUMeshHandle FateRenderer::uploadMesh(const Mesh& mesh) {

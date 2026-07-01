@@ -62,7 +62,9 @@ class FateRenderer {
     IndexAllocator textureDescriptorAllocator{MaxTextureDescriptors};
 
     SDL_Window* window;
-    VkSurfaceKHR surface{VK_NULL_HANDLE};
+    VkSurfaceKHR surface;
+
+    VkFormat depthImageFormat{VK_FORMAT_UNDEFINED};
 
     std::uint32_t imageIndex{0};
     std::uint32_t frameIndex{0};
@@ -76,7 +78,6 @@ class FateRenderer {
     VmaAllocator allocator{VK_NULL_HANDLE};
 
     VkSwapchainKHR swapchain{VK_NULL_HANDLE};
-    bool updateSwapchain{false};
 
     std::vector<VkImage> swapchainImages;
     std::vector<VkImageView> swapchainImageViews;
@@ -128,15 +129,16 @@ public:
 
     ~FateRenderer();
 
-    void render(const Scene& scene);
-
     void buildEditorUI(const Scene& scene, double deltaTime);
 
-    void endRender();
+    void render(const Scene& scene);
 
     [[nodiscard]] SDL_Window* getWindow() const { return window; }
 
     GPUMeshHandle uploadMesh(const Mesh& mesh);
 
     AllocatedTexture* uploadTexture(const TextureData& data);
+
+    // todo this should be way more explicit
+    bool updateSwapchain{false};
 };
