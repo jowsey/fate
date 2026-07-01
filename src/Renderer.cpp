@@ -550,7 +550,7 @@ namespace Fate {
 
                 if (ImGui::CollapsingHeader(("Mesh " + std::to_string(i)).c_str())) {
                     ImGui::Text("%zu vertices, %zu indices", mesh->getVertices().size(), mesh->getIndices().size());
-                    // ImGui::Text("Has albedo map: %s", material->albedoMapHandle.has_value() ? "true" : "false"); // todo vulkan
+                    ImGui::Text("Has albedo map: %s", material->albedoMap ? "true" : "false"); // todo pull from mapFlags?
                     ImGui::Text("Metallic: %.3f, Roughness: %.3f", material->metallic, material->roughness);
                 }
             }
@@ -821,7 +821,13 @@ namespace Fate {
 
                 ObjectData objectData{
                     .model = object->getTransform().getWorldMatrix(),
-                    .albedoIndex = mesh->getMaterial()->albedoMap ? mesh->getMaterial()->albedoMap->descriptorIndex : 0,
+                    .material = {
+                        .baseColour = mesh->getMaterial()->baseColour,
+                        .albedoMapIndex = mesh->getMaterial()->albedoMap ? mesh->getMaterial()->albedoMap->descriptorIndex : 0,
+                        .mapFlags = mesh->getMaterial()->mapFlags,
+                        .metallic = mesh->getMaterial()->metallic,
+                        .roughness = mesh->getMaterial()->roughness,
+                    }
                 };
                 objectDatas.push_back(objectData);
             }

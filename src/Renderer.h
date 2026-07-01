@@ -11,20 +11,14 @@
 #include "Scene.h"
 #include "TextureData.h"
 
-// struct alignas(16) MaterialData {
-//     glm::vec4 baseColour;
-//     // GLuint64 albedoMapHandle;
-//     std::uint32_t mapFlags;
-//     float metallic;
-//     float roughness;
-// };
 
 namespace Fate {
-    struct AllocatedTexture {
-        VkImage image{VK_NULL_HANDLE};
-        VkImageView view{VK_NULL_HANDLE};
-        VmaAllocation allocation{VK_NULL_HANDLE};
-        std::uint32_t descriptorIndex{0};
+    struct MaterialData {
+        glm::vec4 baseColour;
+        std::uint32_t albedoMapIndex;
+        std::uint32_t mapFlags;
+        float metallic;
+        float roughness;
     };
 
     struct FrameGlobals {
@@ -35,7 +29,7 @@ namespace Fate {
 
     struct ObjectData {
         glm::mat4 model;
-        std::uint32_t albedoIndex;
+        MaterialData material;
     };
 
     struct AllocatedBuffer {
@@ -43,6 +37,13 @@ namespace Fate {
         VmaAllocation allocation{VK_NULL_HANDLE};
         VmaAllocationInfo allocationInfo{};
         VkDeviceAddress deviceAddress{};
+    };
+
+    struct AllocatedTexture {
+        VkImage image{VK_NULL_HANDLE};
+        VkImageView view{VK_NULL_HANDLE};
+        VmaAllocation allocation{VK_NULL_HANDLE};
+        std::uint32_t descriptorIndex{0};
     };
 
     struct SamplerCollection {
