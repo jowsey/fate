@@ -24,18 +24,17 @@
 #include "SDL3/SDL_init.h"
 #include "SDL3/SDL_vulkan.h"
 
-// #include "ktx.h"
-// #include "ktxvulkan.h"
-
 #include "GPUMeshHandle.h"
 #include "TextureData.h"
 #include "Scene.h"
 #include "utils/Files.h"
 #include "utils/Paths.h"
 
+#include "vulkan/vk_enum_string_helper.h"
+
 void FateRenderer::vkChk(const VkResult result) {
     if (result != VK_SUCCESS) {
-        std::println(stderr, "Vulkan call returned an error ({})", static_cast<int>(result));
+        std::println(stderr, "Vulkan call returned an error ({})", string_VkResult(result));
         std::exit(result);
     }
 }
@@ -44,24 +43,23 @@ void FateRenderer::vkChkSwapchain(const VkResult result) {
     if (result < VK_SUCCESS) {
         if (result == VK_ERROR_OUT_OF_DATE_KHR) {
             updateSwapchain = true;
+            std::println("Swapchain update requested");
             return;
         }
 
-        std::println(stderr, "Vulkan call returned an error ({}),", static_cast<int>(result));
+        std::println(stderr, "Vulkan call returned an error ({}),", string_VkResult(result));
         std::exit(result);
     }
 }
 
-std::vector<std::uint32_t> loadSPIRV(const std::string& filename) {
-    std::ifstream file(filename, std::ios::ate | std::ios::binary);
+std::vector<std::uint32_t> loadSpirv(const std::filesystem::path& path) {
+    std::ifstream file(path, std::ios::ate | std::ios::binary);
 
     if (!file.is_open()) {
-        throw std::runtime_error("Failed to open shader file: " + filename);
+        throw std::runtime_error("Failed to open shader file: " + path.string());
     }
 
     const std::size_t fileSize = file.tellg();
-
-    // SPIR-V alignment requires data to be in 32-bit (4-byte) chunks
     std::vector<std::uint32_t> buffer(fileSize / sizeof(std::uint32_t));
 
     file.seekg(0);
@@ -87,13 +85,24 @@ FateRenderer::FateRenderer() {
         .engineVersion = VK_MAKE_VERSION(FATE_VERSION_MAJOR, FATE_VERSION_MINOR, FATE_VERSION_PATCH),
         .apiVersion = VK_API_VERSION_1_3
     };
-    std::uint32_t instanceExtensionsCount{0};
-    char const* const* instanceExtensions{SDL_Vulkan_GetInstanceExtensions(&instanceExtensionsCount)};
+
+    const char* validationLayers[] = {
+        "VK_LAYER_KHRONOS_validation"
+    };
+
+    std::uint32_t sdlExtensionCount{0};
+    char const* const* sdlExtensions{SDL_Vulkan_GetInstanceExtensions(&sdlExtensionCount)};
+
+    std::vector<char const *> instanceExtensions(sdlExtensions, sdlExtensions + sdlExtensionCount);
+    instanceExtensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
+
     VkInstanceCreateInfo instanceCI{
         .sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO,
         .pApplicationInfo = &appInfo,
-        .enabledExtensionCount = instanceExtensionsCount,
-        .ppEnabledExtensionNames = instanceExtensions,
+        .enabledLayerCount = 1,
+        .ppEnabledLayerNames = validationLayers,
+        .enabledExtensionCount = static_cast<std::uint32_t>(instanceExtensions.size()),
+        .ppEnabledExtensionNames = instanceExtensions.data()
     };
     vkChk(vkCreateInstance(&instanceCI, nullptr, &instance));
     volkLoadInstance(instance);
@@ -109,7 +118,7 @@ FateRenderer::FateRenderer() {
 
     VkPhysicalDeviceProperties2 physDeviceProperties{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
     vkGetPhysicalDeviceProperties2(physicalDevice, &physDeviceProperties);
-    std::cout << "Selected physical device: " << physDeviceProperties.properties.deviceName << "\n";
+    std::println("Selected physical device: {}", physDeviceProperties.properties.deviceName);
 
     // Find a queue family for graphics
     std::uint32_t queueFamilyCount{0};
@@ -131,9 +140,28 @@ FateRenderer::FateRenderer() {
     // Logical device
     constexpr float queueFamilyPriorities{1.0f};
     VkDeviceQueueCreateInfo queueCI{.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO, .queueFamilyIndex = queueFamilyIndex, .queueCount = 1, .pQueuePriorities = &queueFamilyPriorities};
-    VkPhysicalDeviceVulkan12Features enabledVk12Features{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES, .descriptorIndexing = true, .shaderSampledImageArrayNonUniformIndexing = true, .descriptorBindingVariableDescriptorCount = true, .runtimeDescriptorArray = true, .bufferDeviceAddress = true};
-    VkPhysicalDeviceVulkan13Features enabledVk13Features{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES, .pNext = &enabledVk12Features, .synchronization2 = true, .dynamicRendering = true};
-    VkPhysicalDeviceFeatures enabledVk10Features{.samplerAnisotropy = VK_TRUE};
+
+    VkPhysicalDeviceFeatures enabledVk10Features{
+        .multiDrawIndirect = VK_TRUE,
+        .samplerAnisotropy = VK_TRUE
+    };
+    VkPhysicalDeviceVulkan12Features enabledVk12Features{
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
+        .descriptorIndexing = true,
+        .shaderSampledImageArrayNonUniformIndexing = true,
+        .descriptorBindingSampledImageUpdateAfterBind = true,
+        .descriptorBindingPartiallyBound = true,
+        .descriptorBindingVariableDescriptorCount = true,
+        .runtimeDescriptorArray = true,
+        .bufferDeviceAddress = true
+    };
+    VkPhysicalDeviceVulkan13Features enabledVk13Features{
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
+        .pNext = &enabledVk12Features,
+        .synchronization2 = true,
+        .dynamicRendering = true
+    };
+
     const std::vector<const char *> deviceExtensions{VK_KHR_SWAPCHAIN_EXTENSION_NAME};
     VkDeviceCreateInfo deviceCI{
         .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
@@ -203,7 +231,7 @@ FateRenderer::FateRenderer() {
             break;
         }
     }
-    assert(depthFormat != VK_FORMAT_UNDEFINED);
+
     VkImageCreateInfo depthImageCI{
         .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         .imageType = VK_IMAGE_TYPE_2D,
@@ -221,20 +249,28 @@ FateRenderer::FateRenderer() {
     VkImageViewCreateInfo depthViewCI{.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO, .image = depthImage, .viewType = VK_IMAGE_VIEW_TYPE_2D, .format = depthFormat, .subresourceRange{.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT, .levelCount = 1, .layerCount = 1}};
     vkChk(vkCreateImageView(device, &depthViewCI, nullptr, &depthImageView));
 
-    // Geometry buffer
-    VkBufferCreateInfo geometryBufferCI{
-        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-        .size = GeometryBufferSize,
-        .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
-    };
-    VmaAllocationCreateInfo geometryBufferAllocationCI{
+    // Geometry buffers
+    VmaAllocationCreateInfo geometryBuffersAllocCI{
         .flags = VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
         .usage = VMA_MEMORY_USAGE_AUTO
     };
-    vkChk(vmaCreateBuffer(allocator, &geometryBufferCI, &geometryBufferAllocationCI, &geometryBuffer, &geometryBufferAllocation, &geometryBufferAllocationInfo));
+    VmaVirtualBlockCreateInfo geometryVirtualBlockCI{.size = GeometryBuffersSize};
 
-    VmaVirtualBlockCreateInfo virtualBlockCI{.size = GeometryBufferSize};
-    vkChk(vmaCreateVirtualBlock(&virtualBlockCI, &geometryVirtualBlock));
+    VkBufferCreateInfo vertexBufferCI{
+        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .size = GeometryBuffersSize,
+        .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
+    };
+    vkChk(vmaCreateBuffer(allocator, &vertexBufferCI, &geometryBuffersAllocCI, &vertexBuffer, &vertexBufferAllocation, &vertexBufferAllocationInfo));
+    vkChk(vmaCreateVirtualBlock(&geometryVirtualBlockCI, &vertexVirtualBlock));
+
+    VkBufferCreateInfo indexBufferCI{
+        .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .size = GeometryBuffersSize,
+        .usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
+    };
+    vkChk(vmaCreateBuffer(allocator, &indexBufferCI, &geometryBuffersAllocCI, &indexBuffer, &indexBufferAllocation, &indexBufferAllocationInfo));
+    vkChk(vmaCreateVirtualBlock(&geometryVirtualBlockCI, &indexVirtualBlock));
 
     // Shader data buffers
     // todo abstract this to helper
@@ -279,14 +315,14 @@ FateRenderer::FateRenderer() {
     vkChk(vkAllocateCommandBuffers(device, &cbAllocCI, commandBuffers.data()));
 
     // Descriptor sets
-    VkDescriptorBindingFlags descBindingFlags{VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT};
+    VkDescriptorBindingFlags descBindingFlags{VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT | VK_DESCRIPTOR_BINDING_UPDATE_AFTER_BIND_BIT | VK_DESCRIPTOR_BINDING_VARIABLE_DESCRIPTOR_COUNT_BIT};
     VkDescriptorSetLayoutBindingFlagsCreateInfo textureDescSetBindingFlagsCI{.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_BINDING_FLAGS_CREATE_INFO, .bindingCount = 1, .pBindingFlags = &descBindingFlags};
     VkDescriptorSetLayoutBinding textureDescSetLayoutBinding{.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, .descriptorCount = MaxTextureDescriptors, .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT};
-    VkDescriptorSetLayoutCreateInfo textureDescSetLayoutCI{.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO, .pNext = &textureDescSetBindingFlagsCI, .bindingCount = 1, .pBindings = &textureDescSetLayoutBinding};
+    VkDescriptorSetLayoutCreateInfo textureDescSetLayoutCI{.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO, .pNext = &textureDescSetBindingFlagsCI, .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_UPDATE_AFTER_BIND_POOL_BIT, .bindingCount = 1, .pBindings = &textureDescSetLayoutBinding};
     vkChk(vkCreateDescriptorSetLayout(device, &textureDescSetLayoutCI, nullptr, &textureDescriptorSetLayout));
 
     VkDescriptorPoolSize poolSize{.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, .descriptorCount = MaxTextureDescriptors};
-    VkDescriptorPoolCreateInfo descPoolCI{.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO, .maxSets = 1, .poolSizeCount = 1, .pPoolSizes = &poolSize};
+    VkDescriptorPoolCreateInfo descPoolCI{.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO, .flags = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT, .maxSets = 1, .poolSizeCount = 1, .pPoolSizes = &poolSize};
     vkChk(vkCreateDescriptorPool(device, &descPoolCI, nullptr, &descriptorPool));
 
     VkDescriptorSetVariableDescriptorCountAllocateInfo variableDescCountAI{.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO, .descriptorSetCount = 1, .pDescriptorCounts = &MaxTextureDescriptors};
@@ -306,24 +342,26 @@ FateRenderer::FateRenderer() {
     vkChk(vkCreateSampler(device, &samplerLinearRepeatCI, nullptr, &samplers.linearRepeat));
 
     // Load shaders
-    std::vector<std::uint32_t> vertCode{loadSPIRV("shader.vert.spv")};
-    std::vector<std::uint32_t> fragCode{loadSPIRV("shader.frag.spv")};
+    // std::vector<std::uint32_t> vertCode{loadSPIRV("lit.slang.spv")};
+    // std::vector<std::uint32_t> fragCode{loadSPIRV("lit.slang.spv")};
 
-    VkShaderModuleCreateInfo vertCI{
-        .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-        .codeSize = vertCode.size() * sizeof(std::uint32_t),
-        .pCode = vertCode.data()
-    };
-    VkShaderModule vertModule{};
-    vkChk(vkCreateShaderModule(device, &vertCI, nullptr, &vertModule));
+    std::vector<std::uint32_t> shaderCode{loadSpirv(PathUtils::getEnginePath() / "resources/Shaders/lit.slang.spv")};
 
-    VkShaderModuleCreateInfo fragCI{
+    VkShaderModuleCreateInfo shaderCI{
         .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-        .codeSize = fragCode.size() * sizeof(std::uint32_t),
-        .pCode = fragCode.data()
+        .codeSize = shaderCode.size() * sizeof(std::uint32_t),
+        .pCode = shaderCode.data()
     };
-    VkShaderModule fragModule{};
-    vkChk(vkCreateShaderModule(device, &fragCI, nullptr, &fragModule));
+    VkShaderModule shaderModule{};
+    vkChk(vkCreateShaderModule(device, &shaderCI, nullptr, &shaderModule));
+
+    // VkShaderModuleCreateInfo fragCI{
+    //     .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+    //     .codeSize = fragCode.size() * sizeof(std::uint32_t),
+    //     .pCode = fragCode.data()
+    // };
+    // VkShaderModule fragModule{};
+    // vkChk(vkCreateShaderModule(device, &fragCI, nullptr, &fragModule));
 
     // Pipeline
     VkPushConstantRange pushConstantRange{.stageFlags = VK_SHADER_STAGE_VERTEX_BIT, .size = sizeof(VkDeviceAddress) * 2};
@@ -331,8 +369,8 @@ FateRenderer::FateRenderer() {
     vkChk(vkCreatePipelineLayout(device, &pipelineLayoutCI, nullptr, &pipelineLayout));
 
     std::vector<VkPipelineShaderStageCreateInfo> shaderStages{
-        {.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .stage = VK_SHADER_STAGE_VERTEX_BIT, .module = vertModule, .pName = "main"},
-        {.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .stage = VK_SHADER_STAGE_FRAGMENT_BIT, .module = fragModule, .pName = "main"}
+        {.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .stage = VK_SHADER_STAGE_VERTEX_BIT, .module = shaderModule, .pName = "vertexMain"},
+        {.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .stage = VK_SHADER_STAGE_FRAGMENT_BIT, .module = shaderModule, .pName = "fragmentMain"}
     };
     VkVertexInputBindingDescription vertexBinding{.binding = 0, .stride = sizeof(Vertex), .inputRate = VK_VERTEX_INPUT_RATE_VERTEX};
     std::vector<VkVertexInputAttributeDescription> vertexAttributes{
@@ -375,7 +413,7 @@ FateRenderer::FateRenderer() {
     };
     vkChk(vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineCI, nullptr, &pipeline));
 
-    // imgui
+    // ImGui general setup
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
 
@@ -409,6 +447,7 @@ FateRenderer::FateRenderer() {
     style.FontScaleDpi = contentScale;
     style.ScaleAllSizes(contentScale);
 
+    // ImGui Vulkan/SDL impls setup
     ImGui_ImplSDL3_InitForVulkan(window);
     ImGui_ImplVulkan_InitInfo initInfo{
         .Instance = instance,
@@ -416,7 +455,7 @@ FateRenderer::FateRenderer() {
         .Device = device,
         .QueueFamily = queueFamilyIndex,
         .Queue = queue,
-        .DescriptorPool = descriptorPool,
+        .DescriptorPoolSize = IMGUI_IMPL_VULKAN_MINIMUM_SAMPLED_IMAGE_POOL_SIZE,
         .MinImageCount = 2,
         .ImageCount = 2,
         .PipelineCache = VK_NULL_HANDLE,
@@ -428,13 +467,13 @@ FateRenderer::FateRenderer() {
                 .sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
                 .colorAttachmentCount = 1,
                 .pColorAttachmentFormats = &FrameImageFormat,
+                .depthAttachmentFormat = depthFormat
             }
         },
         .UseDynamicRendering = true,
         .Allocator = VK_NULL_HANDLE,
         .CheckVkResultFn = vkChk,
     };
-
     ImGui_ImplVulkan_Init(&initInfo);
 
     // set window icon
@@ -464,9 +503,9 @@ FateRenderer::~FateRenderer() {
     for (const auto& swapchainImageView: swapchainImageViews) {
         vkDestroyImageView(device, swapchainImageView, nullptr);
     }
-    vmaDestroyBuffer(allocator, geometryBuffer, geometryBufferAllocation);
+    vmaDestroyBuffer(allocator, vertexBuffer, vertexBufferAllocation);
 
-    // todo loop through descriptor set?
+    // todo loop through active meshes with AllocatedTexture handles? or RAII type shit?
     // for (const auto& texture: textures) {
     //     vkDestroyImageView(device, texture.view, nullptr);
     //     vkDestroySampler(device, texture.sampler, nullptr);
@@ -519,10 +558,6 @@ void DrawSceneHierarchyNode(SceneTransform& transform) {
 }
 
 void FateRenderer::render(const Scene& scene) {
-    ImGui_ImplVulkan_NewFrame();
-    ImGui_ImplSDL3_NewFrame();
-    ImGui::NewFrame();
-
 #pragma region Old OpenGL version
     // int winWidth;
     // int winHeight;
@@ -768,13 +803,18 @@ void FateRenderer::render(const Scene& scene) {
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
     vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &textureDescriptorSet, 0, nullptr);
 
-    VkDeviceSize vOffset{0};
-    vkCmdBindVertexBuffers(commandBuffer, 0, 1, &geometryBuffer, &vOffset);
-    vkCmdBindIndexBuffer(commandBuffer, geometryBuffer, geometryBufferAllocationInfo.size, VK_INDEX_TYPE_UINT16);
+    VkDeviceSize vertexOffset{0};
+    vkCmdBindVertexBuffers(commandBuffer, 0, 1, &vertexBuffer, &vertexOffset);
+    vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT16);
+
     vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(VkDeviceAddress), &frameGlobalsBuffers[frameIndex].deviceAddress);
     vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, sizeof(VkDeviceAddress), sizeof(VkDeviceAddress), &objectDataBuffers[frameIndex].deviceAddress);
 
     vkCmdDrawIndexedIndirect(commandBuffer, indirectBuffers[frameIndex].buffer, 0, static_cast<std::uint32_t>(drawCommands.size()), sizeof(VkDrawIndexedIndirectCommand));
+
+    ImGui::Render();
+    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffers[frameIndex]);
+
     vkCmdEndRendering(commandBuffer);
 
     VkImageMemoryBarrier2 barrierPresent{
@@ -819,7 +859,11 @@ void FateRenderer::render(const Scene& scene) {
     frameIndex = (frameIndex + 1) % MaxFramesInFlight;
 }
 
-void FateRenderer::drawEditorUI(const Scene& scene, const double deltaTime) {
+void FateRenderer::buildEditorUI(const Scene& scene, const double deltaTime) {
+    ImGui_ImplVulkan_NewFrame();
+    ImGui_ImplSDL3_NewFrame();
+    ImGui::NewFrame();
+
     if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("File")) {
             if (ImGui::MenuItem("Exit")) {
@@ -897,34 +941,75 @@ void FateRenderer::drawEditorUI(const Scene& scene, const double deltaTime) {
     // }
 
     ImGui::End();
-
-    ImGui::Render();
-    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffers[frameIndex]);
 }
 
-void FateRenderer::endRender() const {
-    // todo no longer necessary after port?
+void FateRenderer::endRender() {
+    // todo trigger more explicitly?
+    // if (updateSwapchain) {
+    //     updateSwapchain = false;
+    //     vkChk(vkDeviceWaitIdle(device));
+    //     vkChk(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, &surfaceCaps));
+    //
+    //     SDL_GetWindowSize(window, &windowSize.x, &windowSize.y);
+    //
+    //     swapchainCI.oldSwapchain = swapchain;
+    //     swapchainCI.imageExtent = {.width = static_cast<uint32_t>(windowSize.x), .height = static_cast<uint32_t>(windowSize.y)};
+    //     vkChk(vkCreateSwapchainKHR(device, &swapchainCI, nullptr, &swapchain));
+    //     for (auto i = 0; i < imageCount; i++) {
+    //         vkDestroyImageView(device, swapchainImageViews[i], nullptr);
+    //     }
+    //     vkChk(vkGetSwapchainImagesKHR(device, swapchain, &imageCount, nullptr));
+    //     swapchainImages.resize(imageCount);
+    //     vkChk(vkGetSwapchainImagesKHR(device, swapchain, &imageCount, swapchainImages.data()));
+    //     swapchainImageViews.resize(imageCount);
+    //     for (auto i = 0; i < imageCount; i++) {
+    //         VkImageViewCreateInfo viewCI{.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO, .image = swapchainImages[i], .viewType = VK_IMAGE_VIEW_TYPE_2D, .format = FrameImageFormat, .subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .levelCount = 1, .layerCount = 1}};
+    //         vkChk(vkCreateImageView(device, &viewCI, nullptr, &swapchainImageViews[i]));
+    //     }
+    //     for (auto& semaphore: renderCompleteSemaphores) {
+    //         vkDestroySemaphore(device, semaphore, nullptr);
+    //     }
+    //     renderCompleteSemaphores.resize(imageCount);
+    //     for (auto& semaphore: renderCompleteSemaphores) {
+    //         vkChk(vkCreateSemaphore(device, &semaphoreCI, nullptr, &semaphore));
+    //     }
+    //
+    //     vkDestroySwapchainKHR(device, swapchainCI.oldSwapchain, nullptr);
+    //     vmaDestroyImage(allocator, depthImage, depthImageAllocation);
+    //     vkDestroyImageView(device, depthImageView, nullptr);
+    //
+    //     depthImageCI.extent = {.width = static_cast<uint32_t>(windowSize.x), .height = static_cast<uint32_t>(windowSize.y), .depth = 1};
+    //     const VmaAllocationCreateInfo allocCI{.flags = VMA_ALLOCATION_CREATE_DEDICATED_MEMORY_BIT, .usage = VMA_MEMORY_USAGE_AUTO};
+    //     vkChk(vmaCreateImage(allocator, &depthImageCI, &allocCI, &depthImage, &depthImageAllocation, nullptr));
+    //     VkImageViewCreateInfo viewCI{.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO, .image = depthImage, .viewType = VK_IMAGE_VIEW_TYPE_2D, .format = depthFormat, .subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT, .levelCount = 1, .layerCount = 1}};
+    //     vkChk(vkCreateImageView(device, &viewCI, nullptr, &depthImageView));
+    // }
 }
 
 GPUMeshHandle FateRenderer::uploadMesh(const Mesh& mesh) {
     const auto vertexBytes = mesh.getVertices().size() * sizeof(Vertex);
     const auto indexBytes = mesh.getIndices().size() * sizeof(std::uint32_t);
 
-    const auto alignedVertexSize = VmaAlignUp(vertexBytes, static_cast<VkDeviceSize>(16));
-    const auto alignedIndexSize = VmaAlignUp(indexBytes, static_cast<VkDeviceSize>(16));
-
-    const VmaVirtualAllocationCreateInfo virtualAllocCI{
-        .size = alignedVertexSize + alignedIndexSize,
+    const VmaVirtualAllocationCreateInfo vertexVirtualAllocCI{
+        .size = vertexBytes,
         .alignment = 16
     };
-    VmaVirtualAllocation virtualAllocation{};
-    VkDeviceSize bufferOffset;
-    vkChk(vmaVirtualAllocate(geometryVirtualBlock, &virtualAllocCI, &virtualAllocation, &bufferOffset));
+    VmaVirtualAllocation vertexVirtualAllocation{};
+    VkDeviceSize vertexOffset;
+    vkChk(vmaVirtualAllocate(vertexVirtualBlock, &vertexVirtualAllocCI, &vertexVirtualAllocation, &vertexOffset));
 
-    std::memcpy(static_cast<char *>(geometryBufferAllocationInfo.pMappedData) + bufferOffset, mesh.getVertices().data(), vertexBytes);
-    std::memcpy(static_cast<char *>(geometryBufferAllocationInfo.pMappedData) + bufferOffset + alignedVertexSize, mesh.getIndices().data(), indexBytes);
+    const VmaVirtualAllocationCreateInfo indexVirtualAllocCI{
+        .size = indexBytes,
+        .alignment = 16
+    };
+    VmaVirtualAllocation indexVirtualAllocation{};
+    VkDeviceSize indexOffset;
+    vkChk(vmaVirtualAllocate(vertexVirtualBlock, &indexVirtualAllocCI, &indexVirtualAllocation, &indexOffset));
 
-    return GPUMeshHandle(bufferOffset, bufferOffset + alignedVertexSize, virtualAllocation);
+    std::memcpy(static_cast<char *>(vertexBufferAllocationInfo.pMappedData) + vertexOffset, mesh.getVertices().data(), vertexBytes);
+    std::memcpy(static_cast<char *>(indexBufferAllocationInfo.pMappedData) + indexOffset, mesh.getIndices().data(), indexBytes);
+
+    return GPUMeshHandle(vertexOffset, indexOffset, vertexVirtualAllocation, indexVirtualAllocation);
 }
 
 std::unique_ptr<AllocatedTexture> FateRenderer::uploadTexture(const TextureData& data) {

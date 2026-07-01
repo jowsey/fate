@@ -88,39 +88,42 @@ set_target_properties(fate PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/dist/bin"
 )
 
-# Include shaders in checking for changes
-file(GLOB_RECURSE SHADER_FILES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/resources/Shaders/*.slang")
+# Copy resources to build directory
+file(GLOB_RECURSE RESOURCE_FILES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/resources/*")
 set(RESOURCE_TIMESTAMP "${CMAKE_CURRENT_BINARY_DIR}/resources.stamp")
-
-# Compile shaders and copy resources to build directory
-# todo test
-set(SLANGC_COMMANDS "")
-foreach (SHADER_FILE IN LISTS SHADER_FILES)
-    get_filename_component(SHADER_NAME "${SHADER_FILE}" NAME)
-    set(SPIRV_OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/resources/Shaders/${SHADER_NAME}.spv")
-    add_custom_command(
-            OUTPUT "${SPIRV_OUTPUT}"
-            COMMAND ${SLANGC_EXE} "${SHADER_FILE}" -target spirv -o "${SPIRV_OUTPUT}"
-            DEPENDS "${SHADER_FILE}"
-            COMMENT "Compiling shader ${SHADER_NAME} to SPIR-V"
-    )
-    list(APPEND SLANGC_COMMANDS "${SPIRV_OUTPUT}")
-endforeach ()
-
-add_custom_target(compile_shaders ALL DEPENDS ${SLANGC_COMMANDS})
-add_dependencies(fate compile_shaders)
 
 add_custom_command(
         OUTPUT "${RESOURCE_TIMESTAMP}"
-        DEPENDS ${SHADER_FILES}
-        COMMAND ${CMAKE_COMMAND} -E remove_directory "${CMAKE_CURRENT_BINARY_DIR}/dist/resources"
+        DEPENDS ${RESOURCE_FILES}
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/dist/resources"
         COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/resources" "${CMAKE_CURRENT_BINARY_DIR}/dist/resources"
         COMMAND ${CMAKE_COMMAND} -E touch "${RESOURCE_TIMESTAMP}"
         COMMENT "Copying resources to build directory"
 )
 
 add_custom_target(copy_resources DEPENDS "${RESOURCE_TIMESTAMP}")
-add_dependencies(fate copy_resources)
+
+# Compile shaders
+file(GLOB_RECURSE SHADER_FILES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/shaders/*.slang")
+
+set(SPIRV_OUTPUTS "")
+foreach (SHADER_FILE IN LISTS SHADER_FILES)
+    get_filename_component(SHADER_NAME "${SHADER_FILE}" NAME)
+    set(SPIRV_OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/dist/resources/Shaders/${SHADER_NAME}.spv")
+    add_custom_command(
+            OUTPUT "${SPIRV_OUTPUT}"
+#            COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/dist/resources/Shaders"
+            COMMAND ${SLANGC_EXE} "${SHADER_FILE}" -target spirv -o "${SPIRV_OUTPUT}"
+            DEPENDS "${SHADER_FILE}" "${RESOURCE_TIMESTAMP}"
+            COMMENT "Compiling shader ${SHADER_NAME} to SPIR-V"
+    )
+    list(APPEND SPIRV_OUTPUTS "${SPIRV_OUTPUT}")
+endforeach ()
+
+add_custom_target(compile_shaders ALL DEPENDS ${SPIRV_OUTPUTS})
+add_dependencies(compile_shaders copy_resources)
+
+add_dependencies(fate compile_shaders)
 
 # Volk
 FetchContent_Declare(
@@ -148,19 +151,19 @@ FetchContent_MakeAvailable(vma)
 target_link_libraries(fate PRIVATE GPUOpen::VulkanMemoryAllocator)
 
 # KTX
-FetchContent_Declare(
-        ktx
-        GIT_REPOSITORY https://github.com/KhronosGroup/KTX-Software.git
-        GIT_TAG v4.4.2
-        GIT_SHALLOW TRUE
-)
-
-set(KTX_FEATURE_TOOLS OFF CACHE BOOL "" FORCE)
-set(KTX_FEATURE_TESTS OFF CACHE BOOL "" FORCE)
-set(KTX_FEATURE_APPS OFF CACHE BOOL "" FORCE)
-
-FetchContent_MakeAvailable(ktx)
-target_link_libraries(fate PRIVATE ktx)
+#FetchContent_Declare(
+#        ktx
+#        GIT_REPOSITORY https://github.com/KhronosGroup/KTX-Software.git
+#        GIT_TAG v4.4.2
+#        GIT_SHALLOW TRUE
+#)
+#
+#set(KTX_FEATURE_TOOLS OFF CACHE BOOL "" FORCE)
+#set(KTX_FEATURE_TESTS OFF CACHE BOOL "" FORCE)
+#set(KTX_FEATURE_APPS OFF CACHE BOOL "" FORCE)
+#
+#FetchContent_MakeAvailable(ktx)
+#target_link_libraries(fate PRIVATE ktx)
 
 # SDL3
 FetchContent_Declare(
@@ -217,9 +220,12 @@ target_include_directories(imgui PUBLIC
         ${imgui_SOURCE_DIR}/backends
 )
 
-target_compile_definitions(imgui PUBLIC IMGUI_DISABLE_DEFAULT_FONT)
+target_compile_definitions(imgui PUBLIC
+        IMGUI_DISABLE_DEFAULT_FONT
+        IMGUI_IMPL_VULKAN_USE_VOLK
+)
 
-target_link_libraries(imgui PRIVATE Vulkan::Vulkan SDL3::SDL3)
+target_link_libraries(imgui PRIVATE Vulkan::Vulkan SDL3::SDL3 volk)
 target_link_libraries(fate PRIVATE imgui)
 
 # assimp

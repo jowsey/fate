@@ -23,7 +23,7 @@ struct AllocatedTexture {
     VkImage image{VK_NULL_HANDLE};
     VkImageView view{VK_NULL_HANDLE};
     VmaAllocation allocation{VK_NULL_HANDLE};
-    std::uint32_t bindingIndex;
+    std::uint32_t bindingIndex{0};
 };
 
 struct FrameGlobals {
@@ -51,7 +51,7 @@ struct SamplerCollection {
 class FateRenderer {
     static constexpr std::uint32_t MaxObjects = 65536;
     static constexpr std::uint32_t MaxTextureDescriptors = 65536;
-    static constexpr std::uint32_t GeometryBufferSize = 1024 * 1024 * 128; // 128MiB
+    static constexpr std::uint32_t GeometryBuffersSize = 1024 * 1024 * 128; // 128MiB
     static constexpr std::uint32_t MaxFramesInFlight{2};
     static constexpr VkFormat FrameImageFormat{VK_FORMAT_B8G8R8A8_SRGB};
 
@@ -97,10 +97,15 @@ class FateRenderer {
     std::array<VkSemaphore, MaxFramesInFlight> imageAcquiredSemaphores;
     std::vector<VkSemaphore> renderCompleteSemaphores;
 
-    VkBuffer geometryBuffer{VK_NULL_HANDLE};
-    VmaAllocation geometryBufferAllocation{VK_NULL_HANDLE};
-    VmaAllocationInfo geometryBufferAllocationInfo{};
-    VmaVirtualBlock geometryVirtualBlock{VK_NULL_HANDLE};
+    VkBuffer vertexBuffer{VK_NULL_HANDLE};
+    VmaAllocation vertexBufferAllocation{VK_NULL_HANDLE};
+    VmaAllocationInfo vertexBufferAllocationInfo{};
+    VmaVirtualBlock vertexVirtualBlock{VK_NULL_HANDLE};
+
+    VkBuffer indexBuffer{VK_NULL_HANDLE};
+    VmaAllocation indexBufferAllocation{VK_NULL_HANDLE};
+    VmaAllocationInfo indexBufferAllocationInfo{};
+    VmaVirtualBlock indexVirtualBlock{VK_NULL_HANDLE};
 
     VkDescriptorPool descriptorPool{VK_NULL_HANDLE};
     VkDescriptorSetLayout textureDescriptorSetLayout{VK_NULL_HANDLE};
@@ -124,9 +129,9 @@ public:
 
     void render(const Scene& scene);
 
-    void drawEditorUI(const Scene& scene, double deltaTime);
+    void buildEditorUI(const Scene& scene, double deltaTime);
 
-    void endRender() const;
+    void endRender();
 
     [[nodiscard]] SDL_Window* getWindow() const { return window; }
 
