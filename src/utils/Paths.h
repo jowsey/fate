@@ -2,7 +2,7 @@
 
 #include <filesystem>
 
-namespace PathUtils {
+namespace Fate::PathUtils {
     std::filesystem::path getExecutablePath();
 
     std::filesystem::path getEnginePath();

@@ -9,7 +9,7 @@
 #include <unistd.h>
 #endif
 
-namespace PathUtils {
+namespace Fate::PathUtils {
     std::filesystem::path getExecutablePath() {
 #if defined(_WIN32)
         std::wstring buffer(MAX_PATH, L'\0');
