@@ -112,7 +112,6 @@ foreach (SHADER_FILE IN LISTS SHADER_FILES)
     set(SPIRV_OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/dist/resources/Shaders/${SHADER_NAME}.spv")
     add_custom_command(
             OUTPUT "${SPIRV_OUTPUT}"
-            #            COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/dist/resources/Shaders"
             COMMAND ${SLANGC_EXE} "${SHADER_FILE}" -target spirv -o "${SPIRV_OUTPUT}"
             DEPENDS "${SHADER_FILE}" "${RESOURCE_TIMESTAMP}"
             COMMENT "Compiling shader ${SHADER_NAME} to SPIR-V"
@@ -210,8 +209,6 @@ set(IMGUI_SOURCES
         ${imgui_SOURCE_DIR}/imgui_draw.cpp
         ${imgui_SOURCE_DIR}/imgui_tables.cpp
         ${imgui_SOURCE_DIR}/imgui_widgets.cpp
-        #        ${imgui_SOURCE_DIR}/backends/imgui_impl_glfw.cpp
-        #        ${imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
         ${imgui_SOURCE_DIR}/backends/imgui_impl_sdl3.cpp
         ${imgui_SOURCE_DIR}/backends/imgui_impl_vulkan.cpp
 )
