@@ -69,10 +69,10 @@ if (CMAKE_BUILD_TYPE STREQUAL "Release")
     target_link_options(fate PRIVATE -Wl,--gc-sections)
 
     # glm SIMD support
-#    target_compile_definitions(fate PRIVATE
-#            GLM_FORCE_INTRINSICS
-#            GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
-#    )
+    #    target_compile_definitions(fate PRIVATE
+    #            GLM_FORCE_INTRINSICS
+    #            GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
+    #    )
 
     # link-time optimization
     include(CheckIPOSupported)
@@ -132,7 +132,7 @@ FetchContent_Declare(
         GIT_SHALLOW TRUE
 )
 
-add_compile_definitions(VK_NO_PROTOTYPES)
+target_compile_definitions(fate PRIVATE VK_NO_PROTOTYPES)
 
 FetchContent_MakeAvailable(volk)
 target_link_libraries(fate PRIVATE volk)
@@ -176,6 +176,16 @@ set(SDL_SHARED OFF CACHE BOOL "" FORCE)
 set(SDL_STATIC ON CACHE BOOL "" FORCE)
 set(SDL_TEST OFF CACHE BOOL "" FORCE)
 set(SDL_DOCS OFF CACHE BOOL "" FORCE)
+
+set(SDL_AUDIO OFF CACHE BOOL "" FORCE)
+set(SDL_GPU OFF CACHE BOOL "" FORCE)
+set(SDL_RENDER OFF CACHE BOOL "" FORCE)
+set(SDL_CAMERA OFF CACHE BOOL "" FORCE)
+set(SDL_JOYSTICK OFF CACHE BOOL "" FORCE)
+set(SDL_HAPTIC OFF CACHE BOOL "" FORCE)
+set(SDL_HIDAPI OFF CACHE BOOL "" FORCE)
+set(SDL_POWER OFF CACHE BOOL "" FORCE)
+set(SDL_SENSOR OFF CACHE BOOL "" FORCE)
 
 FetchContent_MakeAvailable(sdl3)
 target_link_libraries(fate PRIVATE SDL3::SDL3)
