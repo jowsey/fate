@@ -805,7 +805,7 @@ void FateRenderer::render(const Scene& scene) {
 
     VkDeviceSize vertexOffset{0};
     vkCmdBindVertexBuffers(commandBuffer, 0, 1, &vertexBuffer, &vertexOffset);
-    vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT16);
+    vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
     vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(VkDeviceAddress), &frameGlobalsBuffers[frameIndex].deviceAddress);
     vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, sizeof(VkDeviceAddress), sizeof(VkDeviceAddress), &objectDataBuffers[frameIndex].deviceAddress);
@@ -1004,12 +1004,12 @@ GPUMeshHandle FateRenderer::uploadMesh(const Mesh& mesh) {
     };
     VmaVirtualAllocation indexVirtualAllocation{};
     VkDeviceSize indexOffset;
-    vkChk(vmaVirtualAllocate(vertexVirtualBlock, &indexVirtualAllocCI, &indexVirtualAllocation, &indexOffset));
+    vkChk(vmaVirtualAllocate(indexVirtualBlock, &indexVirtualAllocCI, &indexVirtualAllocation, &indexOffset));
 
     std::memcpy(static_cast<char *>(vertexBufferAllocationInfo.pMappedData) + vertexOffset, mesh.getVertices().data(), vertexBytes);
     std::memcpy(static_cast<char *>(indexBufferAllocationInfo.pMappedData) + indexOffset, mesh.getIndices().data(), indexBytes);
 
-    return GPUMeshHandle(vertexOffset, indexOffset, vertexVirtualAllocation, indexVirtualAllocation);
+    return GPUMeshHandle(vertexOffset / sizeof(Vertex), indexOffset / sizeof(std::uint32_t), vertexVirtualAllocation, indexVirtualAllocation);
 }
 
 std::unique_ptr<AllocatedTexture> FateRenderer::uploadTexture(const TextureData& data) {
