@@ -37,7 +37,7 @@ namespace Fate {
         }
 
         this->parent = &newParent;
-        isDirty = true;
+        setDirty();
 
         this->parent->children.push_back(this);
     }
@@ -52,16 +52,16 @@ namespace Fate {
 
     void SceneTransform::setPosition(const glm::dvec3& pos) {
         this->localPosition = pos;
-        isDirty = true;
+        setDirty();
     }
 
     void SceneTransform::setRotation(const glm::quat& rot) {
         this->localRotation = rot;
-        isDirty = true;
+        setDirty();
     }
 
     void SceneTransform::setLocalScale(const glm::vec3& scale) {
         this->localScale = scale;
-        isDirty = true;
+        setDirty();
     }
 }
