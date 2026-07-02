@@ -10,6 +10,7 @@ namespace Fate {
         HasNormalMap = 1 << 1,
         HasMetallicMap = 1 << 2,
         HasRoughnessMap = 1 << 3,
+        HasEmissiveMap = 1 << 4
     };
 
     struct Material {
@@ -22,6 +23,7 @@ namespace Fate {
         AllocatedTexture* normalMap{};
         AllocatedTexture* metallicMap{};
         AllocatedTexture* roughnessMap{};
+        AllocatedTexture* emissiveMap{};
 
         std::uint32_t mapFlags{static_cast<std::uint32_t>(MapFlags::None)};
         bool useAlpha{false};

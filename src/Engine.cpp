@@ -133,27 +133,36 @@ namespace Fate {
             }
         }
 
-        if (const auto albedoTexture = pullTextureFromMaterial(nodeMaterial, scene, aiTextureType_DIFFUSE)) {
+        if (auto albedoTexture = pullTextureFromMaterial(nodeMaterial, scene, aiTextureType_DIFFUSE)) {
+            albedoTexture->colourSpace = TextureColourSpace::SRGB;
             material.albedoMap = renderer.uploadTexture(*albedoTexture);
             material.mapFlags |= static_cast<std::uint32_t>(MapFlags::HasAlbedoMap);
         }
 
-        if (const auto normalTexture = pullTextureFromMaterial(nodeMaterial, scene, aiTextureType_NORMALS)) {
+        if (auto normalTexture = pullTextureFromMaterial(nodeMaterial, scene, aiTextureType_NORMALS)) {
+            normalTexture->colourSpace = TextureColourSpace::Linear;
             material.normalMap = renderer.uploadTexture(*normalTexture);
             material.mapFlags |= static_cast<std::uint32_t>(MapFlags::HasNormalMap);
         }
 
-        if (const auto metallicTexture = pullTextureFromMaterial(nodeMaterial, scene, aiTextureType_METALNESS)) {
+        if (auto metallicTexture = pullTextureFromMaterial(nodeMaterial, scene, aiTextureType_METALNESS)) {
+            metallicTexture->colourSpace = TextureColourSpace::Linear;
             material.metallicMap = renderer.uploadTexture(*metallicTexture);
             material.mapFlags |= static_cast<std::uint32_t>(MapFlags::HasMetallicMap);
         }
 
-        if (const auto roughnessTexture = pullTextureFromMaterial(nodeMaterial, scene, aiTextureType_DIFFUSE_ROUGHNESS)) {
+        if (auto roughnessTexture = pullTextureFromMaterial(nodeMaterial, scene, aiTextureType_DIFFUSE_ROUGHNESS)) {
+            roughnessTexture->colourSpace = TextureColourSpace::Linear;
             material.roughnessMap = renderer.uploadTexture(*roughnessTexture);
             material.mapFlags |= static_cast<std::uint32_t>(MapFlags::HasRoughnessMap);
         }
 
-        // todo combined roughness/metallic
+        if (auto emissiveTexture = pullTextureFromMaterial(nodeMaterial, scene, aiTextureType_EMISSIVE)) {
+            emissiveTexture->colourSpace = TextureColourSpace::SRGB;
+            material.emissiveMap = renderer.uploadTexture(*emissiveTexture);
+            material.mapFlags |= static_cast<std::uint32_t>(MapFlags::HasEmissiveMap);
+        }
+
         return material;
     }
 
@@ -176,6 +185,11 @@ namespace Fate {
 
             if (mesh->HasNormals()) {
                 vertex.normal = {mesh->mNormals[i].x, mesh->mNormals[i].y, mesh->mNormals[i].z};
+            }
+
+            if (mesh->HasTangentsAndBitangents()) {
+                const float handedness = (mesh->mNormals[i] ^ mesh->mTangents[i]) * mesh->mBitangents[i] > 0.0f ? 1.0f : -1.0f;
+                vertex.tangent = {mesh->mTangents[i].x, mesh->mTangents[i].y, mesh->mTangents[i].z, handedness};
             }
 
             if (mesh->HasTextureCoords(0)) {
@@ -238,7 +252,8 @@ namespace Fate {
             aiProcess_Triangulate |
             aiProcess_JoinIdenticalVertices |
             aiProcess_FlipUVs |
-            aiProcess_GenSmoothNormals
+            aiProcess_GenSmoothNormals |
+            aiProcess_CalcTangentSpace
         );
 
         if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode) {

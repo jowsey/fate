@@ -371,7 +371,8 @@ namespace Fate {
             {.location = 0, .binding = 0, .format = VK_FORMAT_R32G32B32A32_SFLOAT, .offset = offsetof(Vertex, baseColour)},
             {.location = 1, .binding = 0, .format = VK_FORMAT_R32G32B32_SFLOAT, .offset = offsetof(Vertex, position)},
             {.location = 2, .binding = 0, .format = VK_FORMAT_R32G32B32_SFLOAT, .offset = offsetof(Vertex, normal)},
-            {.location = 3, .binding = 0, .format = VK_FORMAT_R32G32_SFLOAT, .offset = offsetof(Vertex, texCoord)},
+            {.location = 3, .binding = 0, .format = VK_FORMAT_R32G32B32A32_SFLOAT, .offset = offsetof(Vertex, tangent)},
+            {.location = 4, .binding = 0, .format = VK_FORMAT_R32G32_SFLOAT, .offset = offsetof(Vertex, texCoord)},
         };
         VkPipelineVertexInputStateCreateInfo vertexInputState{
             .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
@@ -556,22 +557,28 @@ namespace Fate {
                 const auto mesh = transform.getObject().getMeshes()[i];
                 const auto material = mesh->getMaterial();
 
-                if (ImGui::CollapsingHeader(("Mesh " + std::to_string(i)).c_str())) {
-                    ImGui::Text("%zu vertices, %zu indices", mesh->getVertices().size(), mesh->getIndices().size());
-                    ImGui::Text("Albedo map:");
-                    ImGui::SameLine();
-                    ImGui::TextColored(material->albedoMap ? ImColor(0, 255, 0) : ImColor(255, 0, 0), "%s", material->albedoMap ? "yes" : "no");
-                    ImGui::Text("Normal map:");
-                    ImGui::SameLine();
-                    ImGui::TextColored(material->normalMap ? ImColor(0, 255, 0) : ImColor(255, 0, 0), "%s", material->normalMap ? "yes" : "no");
-                    ImGui::Text("Metallic map:");
-                    ImGui::SameLine();
-                    ImGui::TextColored(material->metallicMap ? ImColor(0, 255, 0) : ImColor(255, 0, 0), "%s", material->metallicMap ? "yes" : "no");
-                    ImGui::Text("Roughness map:");
-                    ImGui::SameLine();
-                    ImGui::TextColored(material->roughnessMap ? ImColor(0, 255, 0) : ImColor(255, 0, 0), "%s", material->roughnessMap ? "yes" : "no");
-                    ImGui::Text("Metallic: %.3f, Roughness: %.3f", material->metallic, material->roughness);
-                }
+                ImGui::SeparatorText(("Mesh " + std::to_string(i)).c_str());
+                ImGui::Text("%zu vertices, %zu indices", mesh->getVertices().size(), mesh->getIndices().size());
+
+                ImGui::SliderFloat("Metallic", &material->metallic, 0.0f, 1.0f);
+                ImGui::SliderFloat("Roughness", &material->roughness, 0.0f, 1.0f);
+                ImGui::ColorEdit4("Base colour", &material->baseColour.x);
+
+                ImGui::Text("Albedo map:");
+                ImGui::SameLine();
+                ImGui::TextColored(material->albedoMap ? ImColor(0, 255, 0) : ImColor(255, 0, 0), "%s", material->albedoMap ? "yes" : "no");
+                ImGui::Text("Normal map:");
+                ImGui::SameLine();
+                ImGui::TextColored(material->normalMap ? ImColor(0, 255, 0) : ImColor(255, 0, 0), "%s", material->normalMap ? "yes" : "no");
+                ImGui::Text("Metallic map:");
+                ImGui::SameLine();
+                ImGui::TextColored(material->metallicMap ? ImColor(0, 255, 0) : ImColor(255, 0, 0), "%s", material->metallicMap ? "yes" : "no");
+                ImGui::Text("Roughness map:");
+                ImGui::SameLine();
+                ImGui::TextColored(material->roughnessMap ? ImColor(0, 255, 0) : ImColor(255, 0, 0), "%s", material->roughnessMap ? "yes" : "no");
+                ImGui::Text("Emissive map:");
+                ImGui::SameLine();
+                ImGui::TextColored(material->emissiveMap ? ImColor(0, 255, 0) : ImColor(255, 0, 0), "%s", material->emissiveMap ? "yes" : "no");
             }
 
             for (SceneTransform* childTransform: transform.getChildren()) {
@@ -729,6 +736,7 @@ namespace Fate {
                         .normalMapIndex = mesh->getMaterial()->normalMap ? mesh->getMaterial()->normalMap->descriptorIndex : 0,
                         .metallicMapIndex = mesh->getMaterial()->metallicMap ? mesh->getMaterial()->metallicMap->descriptorIndex : 0,
                         .roughnessMapIndex = mesh->getMaterial()->roughnessMap ? mesh->getMaterial()->roughnessMap->descriptorIndex : 0,
+                        .emissiveMapIndex = mesh->getMaterial()->emissiveMap ? mesh->getMaterial()->emissiveMap->descriptorIndex : 0,
                         .mapFlags = mesh->getMaterial()->mapFlags,
                         .metallic = mesh->getMaterial()->metallic,
                         .roughness = mesh->getMaterial()->roughness,
@@ -980,17 +988,17 @@ namespace Fate {
         return GPUMeshHandle(vertexOffset / sizeof(Vertex), indexOffset / sizeof(std::uint32_t), vertexVirtualAllocation, indexVirtualAllocation);
     }
 
-    AllocatedTexture* Renderer::uploadTexture(const TextureData& data) {
-        const auto pixelsSize = data.width * data.height * 4;
-        std::println("Uploading texture of size {}x{} ({})", data.width, data.height, FileUtils::prettyBytes(pixelsSize));
+    AllocatedTexture* Renderer::uploadTexture(const TextureData& texture) {
+        const auto pixelsSize = texture.width * texture.height * 4;
+        std::println("Uploading texture of size {}x{} ({})", texture.width, texture.height, FileUtils::prettyBytes(pixelsSize));
 
         AllocatedTexture allocatedTexture{};
 
         VkImageCreateInfo imageCI{
             .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
             .imageType = VK_IMAGE_TYPE_2D,
-            .format = VK_FORMAT_R8G8B8A8_UNORM,
-            .extent = {.width = data.width, .height = data.height, .depth = 1},
+            .format = texture.colourSpace == TextureColourSpace::SRGB ? VK_FORMAT_R8G8B8A8_SRGB : VK_FORMAT_R8G8B8A8_UNORM,
+            .extent = {.width = texture.width, .height = texture.height, .depth = 1},
             .mipLevels = 1,
             .arrayLayers = 1,
             .samples = VK_SAMPLE_COUNT_1_BIT,
@@ -1017,7 +1025,7 @@ namespace Fate {
         VmaAllocationCreateInfo imgSrcAllocCI{.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT, .usage = VMA_MEMORY_USAGE_AUTO};
         VmaAllocationInfo imgSrcAllocInfo{};
         vkChk(vmaCreateBuffer(allocator, &imgSrcBufferCI, &imgSrcAllocCI, &imgSrcBuffer, &imgSrcAllocation, &imgSrcAllocInfo));
-        std::memcpy(imgSrcAllocInfo.pMappedData, data.pixels.get(), pixelsSize);
+        std::memcpy(imgSrcAllocInfo.pMappedData, texture.pixels.get(), pixelsSize);
 
         VkFence fence{};
         VkFenceCreateInfo fenceCI{.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
@@ -1059,7 +1067,7 @@ namespace Fate {
         VkBufferImageCopy copyRegion{
             .bufferOffset = 0,
             .imageSubresource{.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .mipLevel = 0, .baseArrayLayer = 0, .layerCount = 1},
-            .imageExtent{.width = data.width, .height = data.height, .depth = 1}
+            .imageExtent{.width = texture.width, .height = texture.height, .depth = 1}
         };
         vkCmdCopyBufferToImage(commandBuffer, imgSrcBuffer, allocatedTexture.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
 

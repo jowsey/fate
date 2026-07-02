@@ -18,6 +18,7 @@ namespace Fate {
         std::uint32_t normalMapIndex;
         std::uint32_t metallicMapIndex;
         std::uint32_t roughnessMapIndex;
+        std::uint32_t emissiveMapIndex;
         std::uint32_t mapFlags;
         float metallic;
         float roughness;
@@ -139,9 +140,9 @@ namespace Fate {
         glm::dvec3 cameraPosition{2.25f, 0.0f, 5.0f};
         glm::vec3 cameraRotation{0, 35.0f, 0};
 
-        glm::vec3 lightDir{-1.0f, -1.0f, -0.5f};
+        glm::vec3 lightDir{-0.1f, -0.1f, -1.0f};
         glm::vec4 lightColor{1.0f, 1.0f, 1.0f, 1.0f};
-        float lightIntensity{2.0f};
+        float lightIntensity{5.0f};
 
     public:
         Renderer();
@@ -156,7 +157,7 @@ namespace Fate {
 
         GPUMeshHandle uploadMesh(const Mesh& mesh);
 
-        AllocatedTexture* uploadTexture(const TextureData& data);
+        AllocatedTexture* uploadTexture(const TextureData& texture);
 
         // todo this should be way more explicit
         bool updateSwapchain{false};

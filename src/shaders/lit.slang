@@ -1,4 +1,5 @@
 import "lib/PBRUtils";
+import "lib/TonemappingUtils";
 
 struct MaterialData
 {
@@ -7,7 +8,8 @@ struct MaterialData
     uint32_t normalMapIndex;
     uint32_t metallicMapIndex;
     uint32_t roughnessMapIndex;
-    uint32_t mapFlags; // albedo, normal, metallic, roughness, -, -, -, -
+    uint32_t emissiveMapIndex;
+    uint32_t mapFlags; // albedo, normal, metallic, roughness, emissive, -, -, -
     float metallic;
     float roughness;
 }
@@ -42,6 +44,7 @@ struct VSInput
     float4 baseColour;
     float3 position;
     float3 normal;
+    float4 tangent;
     float2 uv;
 };
 
@@ -51,7 +54,9 @@ struct VSOutput
 
     float4 baseColour;
     float4 position : SV_POSITION;
-    float3 normal;
+    float3 worldNormal;
+    float3 worldTangent;
+    float3 worldBitangent;
     float2 uv;
     float3 worldPos;
 };
@@ -73,7 +78,11 @@ VSOutput vertexMain(VSInput input, uniform PushConstants pc, uint instanceIndex:
     output.instanceID = instanceIndex;
     output.baseColour = input.baseColour;
     output.position = mul(pc.globals->projection, mul(pc.globals->view, mul(object.model, float4(input.position, 1.0))));
-    output.normal = normalize(mul(object.inverseTransposeModel, float4(input.normal, 0.0)).xyz);
+
+    output.worldNormal = normalize(mul(object.inverseTransposeModel, float4(input.normal, 0.0)).xyz);
+    output.worldTangent = normalize(mul(object.model, float4(input.tangent.xyz, 0.0)).xyz);
+    output.worldBitangent = cross(output.worldNormal, output.worldTangent) * input.tangent.w;
+
     output.uv = input.uv;
     output.worldPos = mul(object.model, float4(input.position, 1.0)).xyz;
 
@@ -86,13 +95,18 @@ float4 fragmentMain(VSOutput input, uniform PushConstants pc)
     MaterialData material = pc.objects[input.instanceID].material;
 
     bool hasAlbedoMap = (material.mapFlags & (1 << 0)) != 0;
-    bool hasNormalMap = (material.mapFlags & (1 << 1)) != 0;   // todo use
-    bool hasMetallicMap = (material.mapFlags & (1 << 2)) != 0; // todo handle combined metallic/roughness map (if true, use same texture + different channels)
+    bool hasNormalMap = (material.mapFlags & (1 << 1)) != 0;
+    bool hasMetallicMap = (material.mapFlags & (1 << 2)) != 0;
     bool hasRoughnessMap = (material.mapFlags & (1 << 3)) != 0;
+    bool hasEmissiveMap = (material.mapFlags & (1 << 4)) != 0;
+
+    float3x3 TBN = float3x3(normalize(input.worldTangent), normalize(input.worldBitangent), normalize(input.worldNormal));
 
     float4 albedo = (hasAlbedoMap ? textures[NonUniformResourceIndex(material.albedoMapIndex)].Sample(input.uv) : float4(1.0)) * material.baseColour * input.baseColour;
-    float metallic = (hasMetallicMap ? textures[NonUniformResourceIndex(material.metallicMapIndex)].Sample(input.uv).r : material.metallic);
-    float roughness = (hasRoughnessMap ? textures[NonUniformResourceIndex(material.roughnessMapIndex)].Sample(input.uv).r : material.roughness);
+    float3 normal = (hasNormalMap ? normalize(mul(textures[NonUniformResourceIndex(material.normalMapIndex)].Sample(input.uv).xyz * 2.0 - 1.0, TBN)) : normalize(input.worldNormal));
+    float metallic = (hasMetallicMap ? textures[NonUniformResourceIndex(material.metallicMapIndex)].Sample(input.uv).b : 0.0) * material.metallic;
+    float roughness = (hasRoughnessMap ? textures[NonUniformResourceIndex(material.roughnessMapIndex)].Sample(input.uv).g : 0.0) * material.roughness;
+    float3 emissive = (hasEmissiveMap ? textures[NonUniformResourceIndex(material.emissiveMapIndex)].Sample(input.uv).rgb : float3(0.0));
 
     // todo additive array
     float3 lightDir = pc.globals->light.direction;
@@ -100,7 +114,7 @@ float4 fragmentMain(VSOutput input, uniform PushConstants pc)
     float lightIntensity = pc.globals->light.intensity;
     float3 radiance = lightColour * lightIntensity;
 
-    float3 N = normalize(input.normal);
+    float3 N = normalize(normal);
     float3 V = normalize(pc.globals.cameraPosition - input.worldPos);
     float3 L = normalize(-lightDir);
     float3 H = normalize(V + L);
@@ -125,5 +139,5 @@ float4 fragmentMain(VSOutput input, uniform PushConstants pc)
 
     float3 Lo = (kD * albedo.rgb / PI + specular) * radiance * NdotL;
 
-    return float4(Lo, 1.0);
+    return float4(linearToSRGB(ACESFitted(Lo) + emissive), 1.0);
 }
