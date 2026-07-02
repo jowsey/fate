@@ -545,10 +545,10 @@ namespace Fate {
             if (ImGui::DragScalarN("Position", ImGuiDataType_Double, &position.x, 3, 0.01f)) {
                 transform.setPosition(position);
             }
-            if (ImGui::DragFloat3("Rotation", &eulerAngles.x, 0.01f)) {
+            if (ImGui::DragFloat3("Rotation", &eulerAngles.x, 0.1f)) {
                 transform.setEulerAngles(eulerAngles);
             }
-            if (ImGui::DragFloat3("Scale", &scale.x, 3, 0.01f)) {
+            if (ImGui::DragFloat3("Scale", &scale.x, 0.01f)) {
                 transform.setLocalScale(scale);
             }
 
