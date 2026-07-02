@@ -358,7 +358,7 @@ namespace Fate {
         vkChk(vkCreateShaderModule(device, &shaderCI, nullptr, &shaderModule));
 
         // Pipeline
-        VkPushConstantRange pushConstantRange{.stageFlags = VK_SHADER_STAGE_VERTEX_BIT, .size = sizeof(VkDeviceAddress) * 2};
+        VkPushConstantRange pushConstantRange{.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, .size = sizeof(VkDeviceAddress) * 2};
         VkPipelineLayoutCreateInfo pipelineLayoutCI{.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO, .setLayoutCount = 1, .pSetLayouts = &textureDescriptorSetLayout, .pushConstantRangeCount = 1, .pPushConstantRanges = &pushConstantRange};
         vkChk(vkCreatePipelineLayout(device, &pipelineLayoutCI, nullptr, &pipelineLayout));
 
@@ -550,7 +550,10 @@ namespace Fate {
 
                 if (ImGui::CollapsingHeader(("Mesh " + std::to_string(i)).c_str())) {
                     ImGui::Text("%zu vertices, %zu indices", mesh->getVertices().size(), mesh->getIndices().size());
-                    ImGui::Text("Has albedo map: %s", material->albedoMap ? "true" : "false"); // todo pull from mapFlags?
+                    ImGui::Text("Albedo map: %s", material->albedoMap ? "yes" : "no"); // todo pull from mapFlags?
+                    ImGui::Text("Normal map: %s", material->normalMap ? "yes" : "no");
+                    ImGui::Text("Metallic map: %s", material->metallicMap ? "yes" : "no");
+                    ImGui::Text("Roughness map: %s", material->roughnessMap ? "yes" : "no");
                     ImGui::Text("Metallic: %.3f, Roughness: %.3f", material->metallic, material->roughness);
                 }
             }
@@ -592,8 +595,9 @@ namespace Fate {
                 ImGui::EndMenu();
             }
 
-            static std::deque<double> deltaTimeBuffer{};
-            if (deltaTimeBuffer.size() >= 30) {
+            constexpr std::uint32_t frameBacklog{1};
+            static std::deque<double> deltaTimeBuffer(frameBacklog);
+            if (deltaTimeBuffer.size() >= frameBacklog) {
                 deltaTimeBuffer.pop_front();
             }
             deltaTimeBuffer.push_back(deltaTime);
@@ -617,6 +621,10 @@ namespace Fate {
         ImGui::DragScalarN("Camera position", ImGuiDataType_Double, &cameraPosition, 3, 0.01f);
         ImGui::DragFloat3("Camera rotation", &cameraRotation.x, 0.01f);
 
+        ImGui::DragFloat3("Light direction", &lightDir.x, 0.01f);
+        ImGui::ColorEdit3("Light colour", &lightColor.x);
+        ImGui::DragFloat("Light intensity", &lightIntensity, 0.01f);
+
         if (ImGui::CollapsingHeader("Hierarchy", nullptr, ImGuiTreeNodeFlags_DefaultOpen)) {
             for (SceneObject* object: scene.getObjects()) {
                 if (object->getTransform().getParent() != nullptr) continue;
@@ -624,170 +632,40 @@ namespace Fate {
             }
         }
 
-        // if (ImGui::CollapsingHeader("Resource usage", nullptr, ImGuiTreeNodeFlags_DefaultOpen)) {
-        //     ImGui::ProgressBar(
-        //         static_cast<float>(vboOffset) / DefaultBufferSize,
-        //         ImVec2(-1.0f, 0.0f),
-        //         std::format("VBO usage: {} ({:.5f}%)", FileUtils::prettyBytes(vboOffset), static_cast<float>(vboOffset) / DefaultBufferSize * 100.0f).c_str()
-        //     );
-        //
-        //     ImGui::ProgressBar(
-        //         static_cast<float>(eboOffset) / DefaultBufferSize,
-        //         ImVec2(-1.0f, 0.0f),
-        //         std::format("EBO usage: {} ({:.5f}%)", FileUtils::prettyBytes(eboOffset), static_cast<float>(eboOffset) / DefaultBufferSize * 100.0f).c_str()
-        //     );
-        //
-        //     ImGui::ProgressBar(
-        //         0.0f,
-        //         ImVec2(-1.0f, 0.0f),
-        //         std::format("Texture usage: {}", FileUtils::prettyBytes(textureUploadedBytes)).c_str()
-        //     );
-        // }
+        if (ImGui::CollapsingHeader("Resource usage", nullptr, ImGuiTreeNodeFlags_DefaultOpen)) {
+            // todo profile, maybe cache
+            VmaStatistics vertexBufferStats;
+            vmaGetVirtualBlockStatistics(vertexVirtualBlock, &vertexBufferStats);
+            VmaStatistics indexBufferStats;
+            vmaGetVirtualBlockStatistics(indexVirtualBlock, &indexBufferStats);
+
+            const float vertexUsage = static_cast<float>(vertexBufferStats.allocationBytes) / GeometryBuffersSize;
+            const float indexUsage = static_cast<float>(indexBufferStats.allocationBytes) / GeometryBuffersSize;
+
+            ImGui::ProgressBar(
+                vertexUsage,
+                ImVec2(-1.0f, 0.0f),
+                std::format("Vertex buffer: {} ({:.5f}%)", FileUtils::prettyBytes(vertexBufferStats.allocationBytes), vertexUsage * 100.0f).c_str()
+            );
+
+            ImGui::ProgressBar(
+                static_cast<float>(indexBufferStats.allocationBytes) / GeometryBuffersSize,
+                ImVec2(-1.0f, 0.0f),
+                std::format("Index buffer: {} ({:.5f}%)", FileUtils::prettyBytes(indexBufferStats.allocationBytes), indexUsage * 100.0f).c_str()
+            );
+
+            // todo can we pull from descriptor set? or store manually again
+            // ImGui::ProgressBar(
+            //     0.0f,
+            //     ImVec2(-1.0f, 0.0f),
+            //     std::format("Texture usage: {}", FileUtils::prettyBytes(textureUploadedBytes)).c_str()
+            // );
+        }
 
         ImGui::End();
     }
 
     void Renderer::render(const Scene& scene) {
-#pragma region Old OpenGL version
-        // int winWidth;
-        // int winHeight;
-        // SDL_GetWindowSizeInPixels(window, &winWidth, &winHeight); // todo is this correct equivalent?
-        // const float winAspect = static_cast<float>(winWidth) / winHeight;
-        //
-        // constexpr float camHorFovDegs = 60.0f;
-        // const float fovYRads = 2.0f * glm::atan(glm::tan(glm::radians(camHorFovDegs) * 0.5f) / winAspect);
-        // const glm::mat4 proj = glm::perspective(fovYRads, winAspect, 0.01f, 100.0f);
-        //
-        // const glm::mat4 view = glm::inverse(glm::translate(glm::mat4(1.0f), glm::vec3(cameraPosition)) * glm::mat4_cast(glm::quat(glm::radians(cameraRotation))));
-        //
-        // std::vector<RenderItem> renderItems; // todo cache + reserve, maybe store total meshes
-        //
-        // const auto& objects = scene.getObjects();
-        //
-        // // todo we need to migrate to camera-relative positions at some point
-        // const auto camPos = glm::vec3(cameraPosition);
-        //
-        // for (const auto object: objects) {
-        //     const auto& meshes = object->getMeshes();
-        //
-        //     for (const auto& mesh: meshes) {
-        //         // todo almost certainly doesn't need to be rebuilt from scratch every frame
-        //         const auto command = DrawElementsIndirectCommand{
-        //             .count = static_cast<GLuint>(mesh->getIndices().size()),
-        //             .instanceCount = 1,
-        //             .firstIndex = mesh->getGPUHandle()->getEboOffset(),
-        //             .baseVertex = mesh->getGPUHandle()->getVboOffset(),
-        //             .baseInstance = 0
-        //         };
-        //
-        //         const auto modelMatrix = object->getTransform().getWorldMatrix();
-        //         const auto meshPosition = glm::vec3(modelMatrix[3]);
-        //
-        //         const auto meshMaterial = mesh->getMaterial();
-        //         const auto materialData = MaterialData{
-        //             .baseColour = meshMaterial->baseColour,
-        //             .albedoMapHandle = meshMaterial->albedoMapHandle.value_or(missingTextureHandle),
-        //             .mapFlags = meshMaterial->mapFlags,
-        //             .metallic = meshMaterial->metallic,
-        //             .roughness = meshMaterial->roughness
-        //         };
-        //
-        //         renderItems.push_back(RenderItem{
-        //             .command = command,
-        //             .modelMatrix = modelMatrix,
-        //             .material = materialData,
-        //             .distance = glm::length(meshPosition - camPos),
-        //             .isTransparent = meshMaterial->useAlpha
-        //         });
-        //     }
-        // }
-        //
-        // std::ranges::sort(renderItems, [](const RenderItem& a, const RenderItem& b) {
-        //     if (a.isTransparent != b.isTransparent) {
-        //         return !a.isTransparent; // all opaque first
-        //     }
-        //
-        //     // opaque is closest-first, transparent is farthest-first
-        //     return !a.isTransparent
-        //                ? a.distance < b.distance
-        //                : a.distance > b.distance;
-        // });
-        //
-        // indirectBuffer.clear();
-        // modelMatrices.clear();
-        // materials.clear();
-        // indirectBuffer.reserve(renderItems.size());
-        // modelMatrices.reserve(renderItems.size());
-        // materials.reserve(renderItems.size());
-        //
-        // std::uint32_t ssboIndex = 0;
-        // std::uint32_t opaqueCount = 0;
-        // std::uint32_t transparentCount = 0;
-        //
-        // for (auto& item: renderItems) {
-        //     item.command.baseInstance = ssboIndex++;
-        //
-        //     modelMatrices.push_back(item.modelMatrix);
-        //     materials.push_back(item.material);
-        //
-        //     indirectBuffer.push_back(item.command);
-        //
-        //     if (item.isTransparent) {
-        //         transparentCount++;
-        //     }
-        //     else {
-        //         opaqueCount++;
-        //     }
-        // }
-        //
-        // // todo we also definitely don't need to be resending everything every frame
-        // glNamedBufferSubData(transformBufferSSBO, 0, modelMatrices.size() * sizeof(glm::mat4), modelMatrices.data());
-        // glNamedBufferSubData(materialBufferSSBO, 0, materials.size() * sizeof(MaterialData), materials.data());
-        //
-        // glm::mat4 vp = proj * view;
-        // glProgramUniformMatrix4fv(shaderProgram, 0, 1, GL_FALSE, glm::value_ptr(vp));
-        //
-        // glUseProgram(shaderProgram);
-        // glBindVertexArray(vao);
-        //
-        // glBindBuffer(GL_DRAW_INDIRECT_BUFFER, dib);
-        // glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, transformBufferSSBO);
-        // glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 1, materialBufferSSBO);
-        //
-        // glEnable(GL_DEPTH_TEST);
-        //
-        // glNamedBufferSubData(dib, 0, indirectBuffer.size() * sizeof(DrawElementsIndirectCommand), indirectBuffer.data());
-        //
-        // // Opaque pass
-        // if (opaqueCount > 0) {
-        //     glDisable(GL_BLEND);
-        //     glDepthMask(GL_TRUE);
-        //
-        //     glMultiDrawElementsIndirect(
-        //         GL_TRIANGLES,
-        //         GL_UNSIGNED_INT,
-        //         nullptr,
-        //         opaqueCount,
-        //         0
-        //     );
-        // }
-        //
-        // // Transparent pass
-        // if (transparentCount > 0) {
-        //     glEnable(GL_BLEND);
-        //     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-        //     glDepthMask(GL_FALSE);
-        //
-        //     glMultiDrawElementsIndirect(
-        //         GL_TRIANGLES,
-        //         GL_UNSIGNED_INT,
-        //         reinterpret_cast<const void *>(opaqueCount * sizeof(DrawElementsIndirectCommand)),
-        //         transparentCount,
-        //         0
-        //     );
-        // }
-#pragma endregion
-
         // Wait to acquire next frame image
         vkChk(vkWaitForFences(device, 1, &fences[frameIndex], true, UINT64_MAX));
         vkChk(vkResetFences(device, 1, &fences[frameIndex]));
@@ -800,6 +678,13 @@ namespace Fate {
         frameGlobals.projection = glm::perspective(fovYRads, winAspect, 0.01f, 100.0f);
         frameGlobals.projection[1][1] *= -1.0f; // flip Y for Vulkan
         frameGlobals.view = glm::inverse(glm::translate(glm::mat4(1.0f), glm::vec3(cameraPosition)) * glm::mat4_cast(glm::quat(glm::radians(cameraRotation))));
+        frameGlobals.cameraPosition = glm::vec3(cameraPosition);
+        frameGlobals.light = {
+            .direction = lightDir,
+            .range = 0.0f, // unused
+            .colour = lightColor,
+            .intensity = lightIntensity
+        };
         std::memcpy(frameGlobalsBuffers[frameIndex].allocationInfo.pMappedData, &frameGlobals, sizeof(FrameGlobals));
 
         // Generate object data & draw commands from meshes
@@ -821,9 +706,13 @@ namespace Fate {
 
                 ObjectData objectData{
                     .model = object->getTransform().getWorldMatrix(),
+                    .inverseTransposeModel = glm::transpose(glm::inverse(object->getTransform().getWorldMatrix())),
                     .material = {
                         .baseColour = mesh->getMaterial()->baseColour,
                         .albedoMapIndex = mesh->getMaterial()->albedoMap ? mesh->getMaterial()->albedoMap->descriptorIndex : 0,
+                        .normalMapIndex = mesh->getMaterial()->normalMap ? mesh->getMaterial()->normalMap->descriptorIndex : 0,
+                        .metallicMapIndex = mesh->getMaterial()->metallicMap ? mesh->getMaterial()->metallicMap->descriptorIndex : 0,
+                        .roughnessMapIndex = mesh->getMaterial()->roughnessMap ? mesh->getMaterial()->roughnessMap->descriptorIndex : 0,
                         .mapFlags = mesh->getMaterial()->mapFlags,
                         .metallic = mesh->getMaterial()->metallic,
                         .roughness = mesh->getMaterial()->roughness,
@@ -912,8 +801,8 @@ namespace Fate {
         vkCmdBindVertexBuffers(commandBuffer, 0, 1, &vertexBuffer, &vertexOffset);
         vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
-        vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(VkDeviceAddress), &frameGlobalsBuffers[frameIndex].deviceAddress);
-        vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, sizeof(VkDeviceAddress), sizeof(VkDeviceAddress), &objectDataBuffers[frameIndex].deviceAddress);
+        vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(VkDeviceAddress), &frameGlobalsBuffers[frameIndex].deviceAddress);
+        vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(VkDeviceAddress), sizeof(VkDeviceAddress), &objectDataBuffers[frameIndex].deviceAddress);
 
         vkCmdDrawIndexedIndirect(commandBuffer, indirectBuffers[frameIndex].buffer, 0, static_cast<std::uint32_t>(drawCommands.size()), sizeof(VkDrawIndexedIndirectCommand));
 
@@ -1112,7 +1001,7 @@ namespace Fate {
         VmaAllocationCreateInfo imgSrcAllocCI{.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT, .usage = VMA_MEMORY_USAGE_AUTO};
         VmaAllocationInfo imgSrcAllocInfo{};
         vkChk(vmaCreateBuffer(allocator, &imgSrcBufferCI, &imgSrcAllocCI, &imgSrcBuffer, &imgSrcAllocation, &imgSrcAllocInfo));
-        std::memcpy(imgSrcAllocInfo.pMappedData, data.pixels, pixelsSize);
+        std::memcpy(imgSrcAllocInfo.pMappedData, data.pixels.get(), pixelsSize);
 
         VkFence fence{};
         VkFenceCreateInfo fenceCI{.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};

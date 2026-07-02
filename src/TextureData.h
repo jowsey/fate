@@ -6,6 +6,6 @@ namespace Fate {
         std::uint32_t width;
         std::uint32_t height;
 
-        std::uint8_t* pixels;
+        std::unique_ptr<std::uint8_t[]> pixels;
     };
 }

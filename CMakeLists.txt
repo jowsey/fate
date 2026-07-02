@@ -104,7 +104,9 @@ add_custom_command(
 add_custom_target(copy_resources DEPENDS "${RESOURCE_TIMESTAMP}")
 
 # Compile shaders
-file(GLOB_RECURSE SHADER_FILES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/shaders/*.slang")
+# todo it's kinda yucky that we depend on it being non-recursive to move stuff that doesn't export symbols to lib/
+#      find a way to make it recursive but not complain about libs not exporting symbols
+file(GLOB SHADER_FILES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/shaders/*.slang")
 
 set(SPIRV_OUTPUTS "")
 foreach (SHADER_FILE IN LISTS SHADER_FILES)

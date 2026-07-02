@@ -48,37 +48,7 @@ namespace Fate {
         activeScene = std::move(scene);
     }
 
-    Material Engine::processNodeMaterial(const aiMaterial* nodeMaterial, const aiScene* scene) {
-        aiString materialName;
-        if (nodeMaterial->Get(AI_MATKEY_NAME, materialName) == AI_SUCCESS) {
-            std::string nameStr = materialName.C_Str();
-            std::print("Processing material: {}\n", materialName.C_Str());
-        }
-
-        Material material;
-        nodeMaterial->Get(AI_MATKEY_BASE_COLOR, material.baseColour);
-        nodeMaterial->Get(AI_MATKEY_METALLIC_FACTOR, material.metallic);
-        nodeMaterial->Get(AI_MATKEY_ROUGHNESS_FACTOR, material.roughness);
-
-        aiString alphaMode;
-        if (nodeMaterial->Get(AI_MATKEY_GLTF_ALPHAMODE, alphaMode) == AI_SUCCESS) {
-            const std::string modeStr = alphaMode.C_Str();
-            material.useAlpha = modeStr != "OPAQUE";
-
-            // hack: re-route transmission extension to flat opacity, todo
-            if (!material.useAlpha) {
-                float transmissionFactor;
-                const bool isTransmission = nodeMaterial->Get(AI_MATKEY_TRANSMISSION_FACTOR, transmissionFactor) == AI_SUCCESS;
-
-                if (isTransmission) {
-                    material.useAlpha = true;
-                    material.baseColour.a = 0.01f;
-                }
-            }
-        }
-
-        constexpr aiTextureType textureType = aiTextureType_DIFFUSE; // todo parameter
-
+    std::optional<TextureData> Engine::pullTextureFromMaterial(const aiMaterial* nodeMaterial, const aiScene* scene, const aiTextureType textureType) {
         aiString texturePath;
         if (nodeMaterial->GetTexture(textureType, 0, &texturePath) == AI_SUCCESS) {
             std::print("- Found {} texture at {}", aiTextureTypeToString(textureType), texturePath.C_Str());
@@ -108,13 +78,12 @@ namespace Fate {
                     }
                     else {
                         std::println(", unsupported format", format);
-                        return material;
+                        return std::nullopt;
                     }
 
                     std::print(", dimensions {}x{}\n", width, height);
 
-                    material.albedoMap = renderer.uploadTexture({width, height, decodedData.get()});
-                    material.mapFlags |= static_cast<std::uint32_t>(MapFlags::HasAlbedoMap);
+                    return TextureData{width, height, std::move(decodedData)};
                 }
                 else {
                     // is uncompressed texture
@@ -124,11 +93,67 @@ namespace Fate {
 
                     // todo guesswork, test
                     const auto pixelData = reinterpret_cast<uint8_t *>(texture->pcData);
-                    material.albedoMap = renderer.uploadTexture({width, height, pixelData});
+                    std::unique_ptr<std::uint8_t[]> pixels = std::make_unique_for_overwrite<std::uint8_t[]>(width * height * 4);
+                    std::memcpy(pixels.get(), pixelData, width * height * 4);
+                    return TextureData{width, height, std::move(pixels)};
                 }
             }
         }
 
+        // todo non-embedded textures
+        return std::nullopt;
+    }
+
+    Material Engine::processNodeMaterial(const aiMaterial* nodeMaterial, const aiScene* scene) {
+        aiString materialName;
+        if (nodeMaterial->Get(AI_MATKEY_NAME, materialName) == AI_SUCCESS) {
+            std::string nameStr = materialName.C_Str();
+            std::print("Processing material: {}\n", materialName.C_Str());
+        }
+
+        Material material;
+        nodeMaterial->Get(AI_MATKEY_BASE_COLOR, material.baseColour);
+        nodeMaterial->Get(AI_MATKEY_METALLIC_FACTOR, material.metallic);
+        nodeMaterial->Get(AI_MATKEY_ROUGHNESS_FACTOR, material.roughness);
+
+        aiString alphaMode;
+        if (nodeMaterial->Get(AI_MATKEY_GLTF_ALPHAMODE, alphaMode) == AI_SUCCESS) {
+            const std::string modeStr = alphaMode.C_Str();
+            material.useAlpha = modeStr != "OPAQUE";
+
+            // hack: re-route transmission extension to flat opacity, todo
+            if (!material.useAlpha) {
+                float transmissionFactor;
+                const bool isTransmission = nodeMaterial->Get(AI_MATKEY_TRANSMISSION_FACTOR, transmissionFactor) == AI_SUCCESS;
+
+                if (isTransmission) {
+                    material.useAlpha = true;
+                    material.baseColour.a = 0.01f;
+                }
+            }
+        }
+
+        if (const auto albedoTexture = pullTextureFromMaterial(nodeMaterial, scene, aiTextureType_DIFFUSE)) {
+            material.albedoMap = renderer.uploadTexture(*albedoTexture);
+            material.mapFlags |= static_cast<std::uint32_t>(MapFlags::HasAlbedoMap);
+        }
+
+        if (const auto normalTexture = pullTextureFromMaterial(nodeMaterial, scene, aiTextureType_NORMALS)) {
+            material.normalMap = renderer.uploadTexture(*normalTexture);
+            material.mapFlags |= static_cast<std::uint32_t>(MapFlags::HasNormalMap);
+        }
+
+        if (const auto metallicTexture = pullTextureFromMaterial(nodeMaterial, scene, aiTextureType_METALNESS)) {
+            material.metallicMap = renderer.uploadTexture(*metallicTexture);
+            material.mapFlags |= static_cast<std::uint32_t>(MapFlags::HasMetallicMap);
+        }
+
+        if (const auto roughnessTexture = pullTextureFromMaterial(nodeMaterial, scene, aiTextureType_DIFFUSE_ROUGHNESS)) {
+            material.roughnessMap = renderer.uploadTexture(*roughnessTexture);
+            material.mapFlags |= static_cast<std::uint32_t>(MapFlags::HasRoughnessMap);
+        }
+
+        // todo combined roughness/metallic
         return material;
     }
 

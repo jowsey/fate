@@ -7,6 +7,9 @@ namespace Fate {
     enum class MapFlags : std::uint32_t {
         None = 0,
         HasAlbedoMap = 1 << 0,
+        HasNormalMap = 1 << 1,
+        HasMetallicMap = 1 << 2,
+        HasRoughnessMap = 1 << 3,
     };
 
     struct Material {
@@ -16,6 +19,9 @@ namespace Fate {
 
         // todo this is horrible and needs to die, see Mesh.h
         AllocatedTexture* albedoMap{};
+        AllocatedTexture* normalMap{};
+        AllocatedTexture* metallicMap{};
+        AllocatedTexture* roughnessMap{};
 
         std::uint32_t mapFlags{static_cast<std::uint32_t>(MapFlags::None)};
         bool useAlpha{false};

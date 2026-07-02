@@ -11,24 +11,37 @@
 #include "Scene.h"
 #include "TextureData.h"
 
-
 namespace Fate {
     struct MaterialData {
         glm::vec4 baseColour;
         std::uint32_t albedoMapIndex;
+        std::uint32_t normalMapIndex;
+        std::uint32_t metallicMapIndex;
+        std::uint32_t roughnessMapIndex;
         std::uint32_t mapFlags;
         float metallic;
         float roughness;
     };
 
+    struct LightData {
+        glm::vec3 direction;
+        float range;
+        glm::vec3 colour;
+        float intensity; // todo pack tighter?
+    };
+
     struct FrameGlobals {
         glm::mat4 projection;
         glm::mat4 view;
-        glm::vec4 lightPos{0.0f, -10.0f, 10.0f, 0.0f};
+        glm::vec3 cameraPosition;
+        float _padding;
+
+        LightData light;
     };
 
     struct ObjectData {
         glm::mat4 model;
+        glm::mat4 inverseTransposeModel;
         MaterialData material;
     };
 
@@ -125,6 +138,10 @@ namespace Fate {
 
         glm::dvec3 cameraPosition{2.25f, 1.0f, 5.0f};
         glm::vec3 cameraRotation{0, 35.0f, 0};
+
+        glm::vec3 lightDir{-1.0f, -1.0f, -0.5f};
+        glm::vec4 lightColor{1.0f, 1.0f, 1.0f, 1.0f};
+        float lightIntensity{2.0f};
 
     public:
         Renderer();

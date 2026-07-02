@@ -13,6 +13,8 @@ namespace Fate {
         Renderer renderer;
         std::unique_ptr<Scene> activeScene;
 
+        std::optional<TextureData> pullTextureFromMaterial(const aiMaterial* nodeMaterial, const aiScene* scene, aiTextureType textureType);
+
         Material processNodeMaterial(const aiMaterial* nodeMaterial, const aiScene* scene);
 
         Mesh processNodeMesh(const aiMesh* mesh, const aiScene* scene);
@@ -26,6 +28,7 @@ namespace Fate {
         void run();
 
         void setActiveScene(std::unique_ptr<Scene> scene);
+
 
         [[nodiscard]] Scene* getActiveScene() const { return activeScene.get(); }
 
