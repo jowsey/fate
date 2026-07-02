@@ -13,6 +13,8 @@ namespace Fate {
         glm::quat localRotation{1, 0, 0, 0};
         glm::vec3 localScale{1};
 
+        glm::vec3 localEulerAngles{0};
+
         glm::dmat4 worldMatrix{};
 
         bool isDirty{true};
@@ -32,6 +34,7 @@ namespace Fate {
         [[nodiscard]] const glm::dvec3& getPosition() const { return localPosition; }
         [[nodiscard]] const glm::quat& getRotation() const { return localRotation; }
         [[nodiscard]] const glm::vec3& getLocalScale() const { return localScale; }
+        [[nodiscard]] const glm::vec3& getEulerAngles() const { return localEulerAngles; }
 
         [[nodiscard]] const glm::dmat4& getWorldMatrix();
 
@@ -42,6 +45,8 @@ namespace Fate {
         void setPosition(const glm::dvec3& pos);
 
         void setRotation(const glm::quat& rot);
+
+        void setEulerAngles(const glm::vec3& rot);
 
         void setLocalScale(const glm::vec3& scale);
 

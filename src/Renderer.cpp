@@ -539,10 +539,14 @@ namespace Fate {
     void DrawSceneHierarchyNode(SceneTransform& transform) {
         if (ImGui::TreeNode(transform.getObject().getName().c_str())) {
             auto position = transform.getPosition();
+            auto eulerAngles = transform.getEulerAngles();
             auto scale = transform.getLocalScale();
 
             if (ImGui::DragScalarN("Position", ImGuiDataType_Double, &position.x, 3, 0.01f)) {
                 transform.setPosition(position);
+            }
+            if (ImGui::DragFloat3("Rotation", &eulerAngles.x, 0.01f)) {
+                transform.setEulerAngles(eulerAngles);
             }
             if (ImGui::DragFloat3("Scale", &scale.x, 3, 0.01f)) {
                 transform.setLocalScale(scale);

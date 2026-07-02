@@ -57,6 +57,13 @@ namespace Fate {
 
     void SceneTransform::setRotation(const glm::quat& rot) {
         this->localRotation = rot;
+        this->localEulerAngles = glm::degrees(glm::eulerAngles(rot));
+        setDirty();
+    }
+
+    void SceneTransform::setEulerAngles(const glm::vec3& rot) {
+        this->localEulerAngles = rot;
+        this->localRotation = glm::quat(glm::radians(rot));
         setDirty();
     }
 
