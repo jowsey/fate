@@ -639,8 +639,8 @@ namespace Fate {
             VmaStatistics indexBufferStats;
             vmaGetVirtualBlockStatistics(indexVirtualBlock, &indexBufferStats);
 
-            const float vertexUsage = static_cast<float>(vertexBufferStats.allocationBytes) / GeometryBuffersSize;
-            const float indexUsage = static_cast<float>(indexBufferStats.allocationBytes) / GeometryBuffersSize;
+            const float vertexUsage = static_cast<float>(vertexBufferStats.allocationBytes) / vertexBufferStats.blockBytes;
+            const float indexUsage = static_cast<float>(indexBufferStats.allocationBytes) / indexBufferStats.blockBytes;
 
             ImGui::ProgressBar(
                 vertexUsage,
