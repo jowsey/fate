@@ -10,4 +10,8 @@ namespace Fate {
     void SceneObject::addMesh(std::shared_ptr<Mesh> mesh) {
         meshes.push_back(std::move(mesh));
     }
+
+    void SceneObject::setName(const std::string& newName) {
+        name = newName;
+    }
 }

@@ -36,10 +36,10 @@ namespace Fate {
             parent->children.erase(childIt);
         }
 
-        this->parent = &newParent;
+        parent = &newParent;
         setDirty();
 
-        this->parent->children.push_back(this);
+        parent->children.push_back(this);
     }
 
     const glm::dmat4& SceneTransform::getWorldMatrix() {
@@ -51,24 +51,24 @@ namespace Fate {
     }
 
     void SceneTransform::setPosition(const glm::dvec3& pos) {
-        this->localPosition = pos;
+        localPosition = pos;
         setDirty();
     }
 
     void SceneTransform::setRotation(const glm::quat& rot) {
-        this->localRotation = rot;
-        this->localEulerAngles = glm::degrees(glm::eulerAngles(rot));
+        localRotation = rot;
+        localEulerAngles = glm::degrees(glm::eulerAngles(rot));
         setDirty();
     }
 
     void SceneTransform::setEulerAngles(const glm::vec3& rot) {
-        this->localEulerAngles = rot;
-        this->localRotation = glm::quat(glm::radians(rot));
+        localEulerAngles = rot;
+        localRotation = glm::quat(glm::radians(rot));
         setDirty();
     }
 
     void SceneTransform::setLocalScale(const glm::vec3& scale) {
-        this->localScale = scale;
+        localScale = scale;
         setDirty();
     }
 }

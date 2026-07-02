@@ -558,10 +558,18 @@ namespace Fate {
 
                 if (ImGui::CollapsingHeader(("Mesh " + std::to_string(i)).c_str())) {
                     ImGui::Text("%zu vertices, %zu indices", mesh->getVertices().size(), mesh->getIndices().size());
-                    ImGui::Text("Albedo map: %s", material->albedoMap ? "yes" : "no"); // todo pull from mapFlags?
-                    ImGui::Text("Normal map: %s", material->normalMap ? "yes" : "no");
-                    ImGui::Text("Metallic map: %s", material->metallicMap ? "yes" : "no");
-                    ImGui::Text("Roughness map: %s", material->roughnessMap ? "yes" : "no");
+                    ImGui::Text("Albedo map:");
+                    ImGui::SameLine();
+                    ImGui::TextColored(material->albedoMap ? ImColor(0, 255, 0) : ImColor(255, 0, 0), "%s", material->albedoMap ? "yes" : "no");
+                    ImGui::Text("Normal map:");
+                    ImGui::SameLine();
+                    ImGui::TextColored(material->normalMap ? ImColor(0, 255, 0) : ImColor(255, 0, 0), "%s", material->normalMap ? "yes" : "no");
+                    ImGui::Text("Metallic map:");
+                    ImGui::SameLine();
+                    ImGui::TextColored(material->metallicMap ? ImColor(0, 255, 0) : ImColor(255, 0, 0), "%s", material->metallicMap ? "yes" : "no");
+                    ImGui::Text("Roughness map:");
+                    ImGui::SameLine();
+                    ImGui::TextColored(material->roughnessMap ? ImColor(0, 255, 0) : ImColor(255, 0, 0), "%s", material->roughnessMap ? "yes" : "no");
                     ImGui::Text("Metallic: %.3f, Roughness: %.3f", material->metallic, material->roughness);
                 }
             }
@@ -603,7 +611,7 @@ namespace Fate {
                 ImGui::EndMenu();
             }
 
-            constexpr std::uint32_t frameBacklog{1};
+            constexpr std::uint32_t frameBacklog{5};
             static std::deque<double> deltaTimeBuffer(frameBacklog);
             if (deltaTimeBuffer.size() >= frameBacklog) {
                 deltaTimeBuffer.pop_front();

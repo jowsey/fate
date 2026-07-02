@@ -136,7 +136,7 @@ namespace Fate {
 
         glm::ivec2 windowSize{};
 
-        glm::dvec3 cameraPosition{2.25f, 1.0f, 5.0f};
+        glm::dvec3 cameraPosition{2.25f, 0.0f, 5.0f};
         glm::vec3 cameraRotation{0, 35.0f, 0};
 
         glm::vec3 lightDir{-1.0f, -1.0f, -0.5f};

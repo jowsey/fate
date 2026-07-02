@@ -21,5 +21,7 @@ namespace Fate {
         [[nodiscard]] const std::vector<std::shared_ptr<Mesh>>& getMeshes() const { return meshes; }
 
         void addMesh(std::shared_ptr<Mesh> mesh);
+
+        void setName(const std::string& newName);
     };
 }
