@@ -26,6 +26,7 @@
 #include "SDL3/SDL_init.h"
 #include "SDL3/SDL_vulkan.h"
 
+#include "CubemapData.h"
 #include "GPUMeshHandle.h"
 #include "TextureData.h"
 #include "Scene.h"
@@ -281,9 +282,15 @@ namespace Fate {
         // Shader data buffers
         // todo abstract this to helper
         for (auto i = 0; i < MaxFramesInFlight; i++) {
-            // Frame globals
             VmaAllocationCreateInfo bufferAllocCI{.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT, .usage = VMA_MEMORY_USAGE_AUTO};
 
+            // Skybox globals
+            VkBufferCreateInfo skyboxGlobalsBufferCI{.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO, .size = sizeof(SkyboxGlobals), .usage = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT};
+            vkChk(vmaCreateBuffer(allocator, &skyboxGlobalsBufferCI, &bufferAllocCI, &skyboxGlobalsBuffers[i].buffer, &skyboxGlobalsBuffers[i].allocation, &skyboxGlobalsBuffers[i].allocationInfo));
+            VkBufferDeviceAddressInfo skyboxGlobalsBufferBdaInfo{.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .buffer = skyboxGlobalsBuffers[i].buffer};
+            skyboxGlobalsBuffers[i].deviceAddress = vkGetBufferDeviceAddress(device, &skyboxGlobalsBufferBdaInfo);
+
+            // Frame globals
             VkBufferCreateInfo frameGlobalsBufferCI{.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO, .size = sizeof(FrameGlobals), .usage = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT};
             vkChk(vmaCreateBuffer(allocator, &frameGlobalsBufferCI, &bufferAllocCI, &frameGlobalsBuffers[i].buffer, &frameGlobalsBuffers[i].allocation, &frameGlobalsBuffers[i].allocationInfo));
             VkBufferDeviceAddressInfo frameGlobalsBufferBdaInfo{.sType = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO, .buffer = frameGlobalsBuffers[i].buffer};
@@ -347,24 +354,36 @@ namespace Fate {
         };
         vkChk(vkCreateSampler(device, &samplerLinearRepeatCI, nullptr, &samplers.linearRepeat));
 
-        // Load shaders
-        std::vector<std::uint32_t> shaderCode{loadShader(PathUtils::getEnginePath() / "resources/Shaders/lit.slang.spv")};
-
-        VkShaderModuleCreateInfo shaderCI{
-            .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
-            .codeSize = shaderCode.size() * sizeof(std::uint32_t),
-            .pCode = shaderCode.data()
+        VkSamplerCreateInfo samplerLinearClampCI{
+            .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+            .magFilter = VK_FILTER_LINEAR,
+            .minFilter = VK_FILTER_LINEAR,
+            .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+            .addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+            .addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+            .addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
+            .anisotropyEnable = VK_TRUE,
+            .maxAnisotropy = 8.0f,
+            .maxLod = VK_LOD_CLAMP_NONE
         };
-        vkChk(vkCreateShaderModule(device, &shaderCI, nullptr, &shaderModule));
+        vkChk(vkCreateSampler(device, &samplerLinearClampCI, nullptr, &samplers.linearClamp));
 
-        // Pipeline
+        // Geometry pipeline
         VkPushConstantRange pushConstantRange{.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, .size = sizeof(VkDeviceAddress) * 2};
         VkPipelineLayoutCreateInfo pipelineLayoutCI{.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO, .setLayoutCount = 1, .pSetLayouts = &textureDescriptorSetLayout, .pushConstantRangeCount = 1, .pPushConstantRanges = &pushConstantRange};
-        vkChk(vkCreatePipelineLayout(device, &pipelineLayoutCI, nullptr, &pipelineLayout));
+        vkChk(vkCreatePipelineLayout(device, &pipelineLayoutCI, nullptr, &geometryPipelineLayout));
+
+        std::vector<std::uint32_t> litShaderCode{loadShader(PathUtils::getEnginePath() / "resources/Shaders/lit.slang.spv")};
+        VkShaderModuleCreateInfo litShaderCI{
+            .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+            .codeSize = litShaderCode.size() * sizeof(std::uint32_t),
+            .pCode = litShaderCode.data()
+        };
+        vkChk(vkCreateShaderModule(device, &litShaderCI, nullptr, &litShaderModule));
 
         std::vector<VkPipelineShaderStageCreateInfo> shaderStages{
-            {.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .stage = VK_SHADER_STAGE_VERTEX_BIT, .module = shaderModule, .pName = "vertexMain"},
-            {.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .stage = VK_SHADER_STAGE_FRAGMENT_BIT, .module = shaderModule, .pName = "fragmentMain"}
+            {.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .stage = VK_SHADER_STAGE_VERTEX_BIT, .module = litShaderModule, .pName = "vertexMain"},
+            {.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .stage = VK_SHADER_STAGE_FRAGMENT_BIT, .module = litShaderModule, .pName = "fragmentMain"}
         };
         VkVertexInputBindingDescription vertexBinding{.binding = 0, .stride = sizeof(Vertex), .inputRate = VK_VERTEX_INPUT_RATE_VERTEX};
         std::vector<VkVertexInputAttributeDescription> vertexAttributes{
@@ -404,9 +423,50 @@ namespace Fate {
             .pDepthStencilState = &depthStencilState,
             .pColorBlendState = &colorBlendState,
             .pDynamicState = &dynamicState,
-            .layout = pipelineLayout
+            .layout = geometryPipelineLayout
         };
-        vkChk(vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineCI, nullptr, &pipeline));
+        vkChk(vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineCI, nullptr, &geometryPipeline));
+
+        // Skybox pipeline
+        VkPushConstantRange skyboxPushConstantRange{.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, .size = sizeof(VkDeviceAddress) * 1};
+        VkPipelineLayoutCreateInfo skyboxPipelineLayoutCI{.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO, .setLayoutCount = 1, .pSetLayouts = &textureDescriptorSetLayout, .pushConstantRangeCount = 1, .pPushConstantRanges = &skyboxPushConstantRange};
+        vkChk(vkCreatePipelineLayout(device, &skyboxPipelineLayoutCI, nullptr, &skyboxPipelineLayout));
+
+        std::vector<std::uint32_t> skyboxShaderCode{loadShader(PathUtils::getEnginePath() / "resources/Shaders/skybox.slang.spv")};
+        VkShaderModuleCreateInfo skyboxShaderCI{
+            .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+            .codeSize = skyboxShaderCode.size() * sizeof(std::uint32_t),
+            .pCode = skyboxShaderCode.data()
+        };
+        vkChk(vkCreateShaderModule(device, &skyboxShaderCI, nullptr, &skyboxShaderModule));
+
+        std::vector<VkPipelineShaderStageCreateInfo> skyboxShaderStages{
+            {.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .stage = VK_SHADER_STAGE_VERTEX_BIT, .module = skyboxShaderModule, .pName = "vertexMain"},
+            {.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO, .stage = VK_SHADER_STAGE_FRAGMENT_BIT, .module = skyboxShaderModule, .pName = "fragmentMain"}
+        };
+        VkPipelineVertexInputStateCreateInfo skyboxVertexInputState{
+            .sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+            .vertexBindingDescriptionCount = 0,
+            .vertexAttributeDescriptionCount = 0,
+        };
+
+        VkPipelineDepthStencilStateCreateInfo skyboxDepthStencilState{.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO, .depthTestEnable = VK_TRUE, .depthWriteEnable = VK_FALSE, .depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL};
+        VkGraphicsPipelineCreateInfo skyboxPipelineCI{
+            .sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+            .pNext = &renderingCI,
+            .stageCount = 2,
+            .pStages = skyboxShaderStages.data(),
+            .pVertexInputState = &skyboxVertexInputState,
+            .pInputAssemblyState = &inputAssemblyState,
+            .pViewportState = &viewportState,
+            .pRasterizationState = &rasterizationState,
+            .pMultisampleState = &multisampleState,
+            .pDepthStencilState = &skyboxDepthStencilState,
+            .pColorBlendState = &colorBlendState,
+            .pDynamicState = &dynamicState,
+            .layout = skyboxPipelineLayout
+        };
+        vkChk(vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &skyboxPipelineCI, nullptr, &skyboxPipeline));
 
         // ImGui general setup
         IMGUI_CHECKVERSION();
@@ -485,6 +545,7 @@ namespace Fate {
         for (auto i = 0; i < MaxFramesInFlight; i++) {
             vkDestroyFence(device, fences[i], nullptr);
             vkDestroySemaphore(device, imageAcquiredSemaphores[i], nullptr);
+            vmaDestroyBuffer(allocator, skyboxGlobalsBuffers[i].buffer, skyboxGlobalsBuffers[i].allocation);
             vmaDestroyBuffer(allocator, frameGlobalsBuffers[i].buffer, frameGlobalsBuffers[i].allocation);
             vmaDestroyBuffer(allocator, objectDataBuffers[i].buffer, objectDataBuffers[i].allocation);
             vmaDestroyBuffer(allocator, indirectBuffers[i].buffer, indirectBuffers[i].allocation);
@@ -506,6 +567,7 @@ namespace Fate {
         }
 
         vkDestroySampler(device, samplers.linearRepeat, nullptr);
+        vkDestroySampler(device, samplers.linearClamp, nullptr);
 
         vmaDestroyBuffer(allocator, vertexBuffer, vertexBufferAllocation);
         vertexVirtualBlock->Clear();
@@ -515,14 +577,19 @@ namespace Fate {
         indexVirtualBlock->Clear();
         vmaDestroyVirtualBlock(indexVirtualBlock);
 
+        vkDestroyPipelineLayout(device, geometryPipelineLayout, nullptr);
+        vkDestroyPipeline(device, geometryPipeline, nullptr);
+        vkDestroyShaderModule(device, litShaderModule, nullptr);
+
+        vkDestroyPipelineLayout(device, skyboxPipelineLayout, nullptr);
+        vkDestroyPipeline(device, skyboxPipeline, nullptr);
+        vkDestroyShaderModule(device, skyboxShaderModule, nullptr);
+
         vkDestroyDescriptorSetLayout(device, textureDescriptorSetLayout, nullptr);
         vkDestroyDescriptorPool(device, descriptorPool, nullptr);
-        vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
-        vkDestroyPipeline(device, pipeline, nullptr);
         vkDestroySwapchainKHR(device, swapchain, nullptr);
         vkDestroySurfaceKHR(instance, surface, nullptr);
         vkDestroyCommandPool(device, commandPool, nullptr);
-        vkDestroyShaderModule(device, shaderModule, nullptr);
         vmaDestroyAllocator(allocator);
 
         ImGui_ImplVulkan_Shutdown();
@@ -560,6 +627,12 @@ namespace Fate {
                 ImGui::SeparatorText(("Mesh " + std::to_string(i)).c_str());
                 ImGui::Text("%zu vertices, %zu indices", mesh->getVertices().size(), mesh->getIndices().size());
 
+                // todo:
+                // [x] 0.5: equirectangular -> cubemap generator
+                // [ ] 1: display skybox
+                // [ ] 2. camera movement/control
+                // [ ] 3. IBL i guess
+
                 ImGui::SliderFloat("Metallic", &material->metallic, 0.0f, 1.0f);
                 ImGui::SliderFloat("Roughness", &material->roughness, 0.0f, 1.0f);
                 ImGui::ColorEdit4("Base colour", &material->baseColour.x);
@@ -589,6 +662,7 @@ namespace Fate {
         }
     }
 
+    // todo this should probably be in Engine and call in to Renderer separately
     void Renderer::buildEditorUI(const Scene& scene, const double deltaTime) {
         ImGui_ImplVulkan_NewFrame();
         ImGui_ImplSDL3_NewFrame();
@@ -642,7 +716,8 @@ namespace Fate {
         ImGui::Begin("Debug");
 
         ImGui::DragScalarN("Camera position", ImGuiDataType_Double, &cameraPosition, 3, 0.01f);
-        ImGui::DragFloat3("Camera rotation", &cameraRotation.x, 0.01f);
+        ImGui::DragFloat3("Camera rotation", &cameraRotation.x, 0.1f);
+        ImGui::DragFloat("Camera FOV", &cameraHorFovDegs, 0.1f);
 
         ImGui::DragFloat3("Light direction", &lightDir.x, 0.01f);
         ImGui::ColorEdit3("Light colour", &lightColor.x);
@@ -662,19 +737,19 @@ namespace Fate {
             VmaStatistics indexBufferStats;
             vmaGetVirtualBlockStatistics(indexVirtualBlock, &indexBufferStats);
 
-            const float vertexUsage = static_cast<float>(vertexBufferStats.allocationBytes) / vertexBufferStats.blockBytes;
-            const float indexUsage = static_cast<float>(indexBufferStats.allocationBytes) / indexBufferStats.blockBytes;
+            const float vertexUsage = static_cast<float>(vertexBufferStats.allocationBytes) / static_cast<float>(vertexBufferStats.blockBytes);
+            const float indexUsage = static_cast<float>(indexBufferStats.allocationBytes) / static_cast<float>(indexBufferStats.blockBytes);
 
             ImGui::ProgressBar(
                 vertexUsage,
                 ImVec2(-1.0f, 0.0f),
-                std::format("Vertex buffer: {} ({:.5f}%)", FileUtils::prettyBytes(vertexBufferStats.allocationBytes), vertexUsage * 100.0f).c_str()
+                std::format("Vertex buffer: {} ({:.3f}%)", FileUtils::prettyBytes(vertexBufferStats.allocationBytes), vertexUsage * 100.0f).c_str()
             );
 
             ImGui::ProgressBar(
-                static_cast<float>(indexBufferStats.allocationBytes) / GeometryBuffersSize,
+                indexUsage,
                 ImVec2(-1.0f, 0.0f),
-                std::format("Index buffer: {} ({:.5f}%)", FileUtils::prettyBytes(indexBufferStats.allocationBytes), indexUsage * 100.0f).c_str()
+                std::format("Index buffer: {} ({:.3f}%)", FileUtils::prettyBytes(indexBufferStats.allocationBytes), indexUsage * 100.0f).c_str()
             );
 
             // todo can we pull from descriptor set? or store manually again
@@ -694,13 +769,26 @@ namespace Fate {
         vkChk(vkResetFences(device, 1, &fences[frameIndex]));
         vkChkSwapchain(vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, imageAcquiredSemaphores[frameIndex], VK_NULL_HANDLE, &imageIndex));
 
-        // Build frame globals buffer
-        const float winAspect = static_cast<float>(windowSize.x) / windowSize.y;
-        constexpr float camHorFovDegs = 60.0f;
-        const float fovYRads = 2.0f * glm::atan(glm::tan(glm::radians(camHorFovDegs) * 0.5f) / winAspect);
-        frameGlobals.projection = glm::perspective(fovYRads, winAspect, 0.01f, 100.0f);
-        frameGlobals.projection[1][1] *= -1.0f; // flip Y for Vulkan
-        frameGlobals.view = glm::inverse(glm::translate(glm::mat4(1.0f), glm::vec3(cameraPosition)) * glm::mat4_cast(glm::quat(glm::radians(cameraRotation))));
+        // Build globals buffers
+        glm::mat4 viewMatrix = glm::inverse(glm::translate(glm::mat4(1.0f), glm::vec3(cameraPosition)) * glm::mat4_cast(glm::quat(glm::radians(cameraRotation))));
+
+        const float winAspect = static_cast<float>(windowSize.x) / static_cast<float>(windowSize.y);
+        const float fovYRads = 2.0f * glm::atan(glm::tan(glm::radians(cameraHorFovDegs) * 0.5f) / winAspect);
+
+        glm::mat4 projectionMatrix = glm::perspective(fovYRads, winAspect, 0.01f, 100.0f);
+        projectionMatrix[1][1] *= -1.0f; // flip Y for Vulkan
+
+        if (scene.getSkybox()) {
+            skyboxGlobals.view = viewMatrix;
+            skyboxGlobals.projection = projectionMatrix;
+            skyboxGlobals.cubemapIndex = scene.getSkybox()->descriptorIndex;
+
+            std::memcpy(skyboxGlobalsBuffers[frameIndex].allocationInfo.pMappedData, &skyboxGlobals, sizeof(SkyboxGlobals));
+        }
+
+        frameGlobals.view = viewMatrix;
+        frameGlobals.projection = projectionMatrix;
+
         frameGlobals.cameraPosition = glm::vec3(cameraPosition);
         frameGlobals.light = {
             .direction = lightDir,
@@ -708,6 +796,7 @@ namespace Fate {
             .colour = lightColor,
             .intensity = lightIntensity
         };
+
         std::memcpy(frameGlobalsBuffers[frameIndex].allocationInfo.pMappedData, &frameGlobals, sizeof(FrameGlobals));
 
         // Generate object data & draw commands from meshes
@@ -748,10 +837,6 @@ namespace Fate {
 
         std::memcpy(indirectBuffers[frameIndex].allocationInfo.pMappedData, drawCommands.data(), drawCommands.size() * sizeof(VkDrawIndexedIndirectCommand));
         std::memcpy(objectDataBuffers[frameIndex].allocationInfo.pMappedData, objectDatas.data(), objectDatas.size() * sizeof(ObjectData));
-
-        vmaFlushAllocation(allocator, frameGlobalsBuffers[frameIndex].allocation, 0, VK_WHOLE_SIZE);
-        vmaFlushAllocation(allocator, indirectBuffers[frameIndex].allocation, 0, VK_WHOLE_SIZE);
-        vmaFlushAllocation(allocator, objectDataBuffers[frameIndex].allocation, 0, VK_WHOLE_SIZE);
 
         // Build command buffer
         auto commandBuffer = commandBuffers[frameIndex];
@@ -818,17 +903,27 @@ namespace Fate {
         VkRect2D scissor{.extent{.width = static_cast<std::uint32_t>(windowSize.x), .height = static_cast<std::uint32_t>(windowSize.y)}};
         vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &textureDescriptorSet, 0, nullptr);
+        // Geometry
+        vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, geometryPipeline);
+        vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, geometryPipelineLayout, 0, 1, &textureDescriptorSet, 0, nullptr);
 
         VkDeviceSize vertexOffset{0};
         vkCmdBindVertexBuffers(commandBuffer, 0, 1, &vertexBuffer, &vertexOffset);
         vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 
-        vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(VkDeviceAddress), &frameGlobalsBuffers[frameIndex].deviceAddress);
-        vkCmdPushConstants(commandBuffer, pipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(VkDeviceAddress), sizeof(VkDeviceAddress), &objectDataBuffers[frameIndex].deviceAddress);
+        vkCmdPushConstants(commandBuffer, geometryPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(VkDeviceAddress), &frameGlobalsBuffers[frameIndex].deviceAddress);
+        vkCmdPushConstants(commandBuffer, geometryPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, sizeof(VkDeviceAddress), sizeof(VkDeviceAddress), &objectDataBuffers[frameIndex].deviceAddress);
 
         vkCmdDrawIndexedIndirect(commandBuffer, indirectBuffers[frameIndex].buffer, 0, static_cast<std::uint32_t>(drawCommands.size()), sizeof(VkDrawIndexedIndirectCommand));
+
+        // Skybox
+        if (scene.getSkybox()) {
+            vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, skyboxPipeline);
+            vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, skyboxPipelineLayout, 0, 1, &textureDescriptorSet, 0, nullptr);
+
+            vkCmdPushConstants(commandBuffer, skyboxPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(VkDeviceAddress), &skyboxGlobalsBuffers[frameIndex].deviceAddress);
+            vkCmdDraw(commandBuffer, 36, 1, 0, 0);
+        }
 
         ImGui::Render();
         ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffers[frameIndex]);
@@ -982,9 +1077,6 @@ namespace Fate {
         std::memcpy(static_cast<char *>(vertexBufferAllocationInfo.pMappedData) + vertexOffset, mesh.getVertices().data(), vertexBytes);
         std::memcpy(static_cast<char *>(indexBufferAllocationInfo.pMappedData) + indexOffset, mesh.getIndices().data(), indexBytes);
 
-        vmaFlushAllocation(allocator, vertexBufferAllocation, vertexOffset, vertexBytes);
-        vmaFlushAllocation(allocator, indexBufferAllocation, indexOffset, indexBytes);
-
         return GPUMeshHandle(vertexOffset / sizeof(Vertex), indexOffset / sizeof(std::uint32_t), vertexVirtualAllocation, indexVirtualAllocation);
     }
 
@@ -1027,17 +1119,13 @@ namespace Fate {
         vkChk(vmaCreateBuffer(allocator, &imgSrcBufferCI, &imgSrcAllocCI, &imgSrcBuffer, &imgSrcAllocation, &imgSrcAllocInfo));
         std::memcpy(imgSrcAllocInfo.pMappedData, texture.pixels.get(), pixelsSize);
 
-        VkFence fence{};
-        VkFenceCreateInfo fenceCI{.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
-        vkChk(vkCreateFence(device, &fenceCI, nullptr, &fence));
-
         VkCommandBuffer commandBuffer{};
         VkCommandBufferAllocateInfo commandBufferAI{.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO, .commandPool = commandPool, .commandBufferCount = 1};
         vkChk(vkAllocateCommandBuffers(device, &commandBufferAI, &commandBuffer));
 
         VkCommandBufferBeginInfo commandBufferBI{.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT};
         vkChk(vkBeginCommandBuffer(commandBuffer, &commandBufferBI));
-        VkImageMemoryBarrier2 barrierTexImage{
+        VkImageMemoryBarrier2 barrierImageTransferDst{
             .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
             .srcStageMask = VK_PIPELINE_STAGE_2_NONE,
             .srcAccessMask = VK_ACCESS_2_NONE,
@@ -1048,8 +1136,8 @@ namespace Fate {
             .image = allocatedTexture.image,
             .subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .levelCount = 1, .layerCount = 1}
         };
-        VkDependencyInfo barrierTexInfo{.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &barrierTexImage};
-        vkCmdPipelineBarrier2(commandBuffer, &barrierTexInfo);
+        VkDependencyInfo barrierImageInfo{.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &barrierImageTransferDst};
+        vkCmdPipelineBarrier2(commandBuffer, &barrierImageInfo);
 
         // todo mipmaps
         // std::vector<VkBufferImageCopy> copyRegions{};
@@ -1071,20 +1159,24 @@ namespace Fate {
         };
         vkCmdCopyBufferToImage(commandBuffer, imgSrcBuffer, allocatedTexture.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copyRegion);
 
-        VkImageMemoryBarrier2 barrierTexRead{
+        VkImageMemoryBarrier2 barrierImageShaderRead{
             .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-            .srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT,
-            .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
-            .dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-            .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+            .srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+            .srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+            .dstStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+            .dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT,
             .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
             .newLayout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL,
             .image = allocatedTexture.image,
             .subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .levelCount = 1, .layerCount = 1}
         };
-        barrierTexInfo.pImageMemoryBarriers = &barrierTexRead;
-        vkCmdPipelineBarrier2(commandBuffer, &barrierTexInfo);
+        barrierImageInfo.pImageMemoryBarriers = &barrierImageShaderRead;
+        vkCmdPipelineBarrier2(commandBuffer, &barrierImageInfo);
         vkChk(vkEndCommandBuffer(commandBuffer));
+
+        VkFence fence{};
+        VkFenceCreateInfo fenceCI{.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
+        vkChk(vkCreateFence(device, &fenceCI, nullptr, &fence));
 
         VkSubmitInfo submitInfo{.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO, .commandBufferCount = 1, .pCommandBuffers = &commandBuffer};
         vkChk(vkQueueSubmit(queue, 1, &submitInfo, fence));
@@ -1098,6 +1190,136 @@ namespace Fate {
         allocatedTexture.descriptorIndex = bindingIndex;
 
         VkDescriptorImageInfo textureImageInfo{.sampler = samplers.linearRepeat, .imageView = allocatedTexture.view, .imageLayout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL};
+        VkWriteDescriptorSet descriptorWrite{
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = textureDescriptorSet,
+            .dstBinding = 0,
+            .dstArrayElement = allocatedTexture.descriptorIndex,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .pImageInfo = &textureImageInfo
+        };
+        vkUpdateDescriptorSets(device, 1, &descriptorWrite, 0, nullptr);
+
+        // don't need to resize if using a recycled/freed index
+        if (bindingIndex >= allocatedTextures.size()) {
+            allocatedTextures.resize(bindingIndex + 1);
+        }
+
+        auto uptr = std::make_unique<AllocatedTexture>(allocatedTexture);
+        allocatedTextures[bindingIndex] = std::move(uptr);
+
+        return allocatedTextures[bindingIndex].get();
+    }
+
+    AllocatedTexture* Renderer::uploadCubemap(const CubemapData& cubemap) {
+        const auto faceBytes = cubemap.faceWidth * cubemap.faceHeight * 4;
+        std::println("Uploading cubemap of size {}x{}[x6] ({})", cubemap.faceWidth, cubemap.faceHeight, FileUtils::prettyBytes(faceBytes * 6));
+
+        // todo this can be *heavily* deduplicated, should just run through uploadTexture with some flags
+
+        AllocatedTexture allocatedTexture{};
+
+        VkImageCreateInfo imageCI{
+            .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+            .flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT,
+            .imageType = VK_IMAGE_TYPE_2D,
+            .format = VK_FORMAT_R8G8B8A8_SRGB,
+            .extent = {.width = cubemap.faceWidth, .height = cubemap.faceHeight, .depth = 1},
+            .mipLevels = 1,
+            .arrayLayers = 6,
+            .samples = VK_SAMPLE_COUNT_1_BIT,
+            .tiling = VK_IMAGE_TILING_OPTIMAL,
+            .usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+            .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED
+        };
+        VmaAllocationCreateInfo imageAllocCI{.usage = VMA_MEMORY_USAGE_AUTO};
+        vkChk(vmaCreateImage(allocator, &imageCI, &imageAllocCI, &allocatedTexture.image, &allocatedTexture.allocation, nullptr));
+
+        VkImageViewCreateInfo imageViewCI{
+            .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+            .image = allocatedTexture.image,
+            .viewType = VK_IMAGE_VIEW_TYPE_CUBE,
+            .format = imageCI.format,
+            .subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .levelCount = 1, .layerCount = 6}
+        };
+        vkChk(vkCreateImageView(device, &imageViewCI, nullptr, &allocatedTexture.view));
+
+        // Upload to staging buffer
+        VkBuffer stagingBuffer{};
+        VmaAllocation stagingBufferAlloc{};
+        VkBufferCreateInfo stagingBufferCI{.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO, .size = faceBytes * 6, .usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT};
+        VmaAllocationCreateInfo stagingBufferAllocCI{.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT, .usage = VMA_MEMORY_USAGE_AUTO};
+        VmaAllocationInfo stagingBufferAllocInfo{};
+        vkChk(vmaCreateBuffer(allocator, &stagingBufferCI, &stagingBufferAllocCI, &stagingBuffer, &stagingBufferAlloc, &stagingBufferAllocInfo));
+        for (std::size_t i = 0; i < 6; ++i) {
+            std::memcpy(static_cast<char *>(stagingBufferAllocInfo.pMappedData) + faceBytes * i, cubemap.faces[i].get(), faceBytes);
+        }
+
+        VkCommandBuffer commandBuffer{};
+        VkCommandBufferAllocateInfo commandBufferAI{.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO, .commandPool = commandPool, .commandBufferCount = 1};
+        vkChk(vkAllocateCommandBuffers(device, &commandBufferAI, &commandBuffer));
+
+        VkCommandBufferBeginInfo commandBufferBI{.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO, .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT};
+        vkChk(vkBeginCommandBuffer(commandBuffer, &commandBufferBI));
+        VkImageMemoryBarrier2 barrierImageTransferDst{
+            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+            .srcStageMask = VK_PIPELINE_STAGE_2_NONE,
+            .srcAccessMask = VK_ACCESS_2_NONE,
+            .dstStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+            .dstAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+            .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+            .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            .image = allocatedTexture.image,
+            .subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .levelCount = 1, .layerCount = 6}
+        };
+        VkDependencyInfo barrierImageInfo{.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &barrierImageTransferDst};
+        vkCmdPipelineBarrier2(commandBuffer, &barrierImageInfo);
+
+        std::vector<VkBufferImageCopy> regions;
+        regions.reserve(6);
+        for (std::uint32_t face = 0; face < 6; face++) {
+            // todo could possibly be one region of layerCount = 6 since they're all the same?
+            VkBufferImageCopy region{
+                .bufferOffset = faceBytes * face,
+                .imageSubresource = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .mipLevel = 0, .baseArrayLayer = face, .layerCount = 1},
+                .imageExtent = {.width = cubemap.faceWidth, .height = cubemap.faceHeight, .depth = 1}
+            };
+            regions.push_back(region);
+        }
+        vkCmdCopyBufferToImage(commandBuffer, stagingBuffer, allocatedTexture.image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 6, regions.data());
+
+        VkImageMemoryBarrier2 barrierImageShaderRead{
+            .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+            .srcStageMask = VK_PIPELINE_STAGE_2_TRANSFER_BIT,
+            .srcAccessMask = VK_ACCESS_2_TRANSFER_WRITE_BIT,
+            .dstStageMask = VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+            .dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT,
+            .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            .newLayout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL,
+            .image = allocatedTexture.image,
+            .subresourceRange = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .levelCount = 1, .layerCount = 6}
+        };
+        barrierImageInfo.pImageMemoryBarriers = &barrierImageShaderRead;
+        vkCmdPipelineBarrier2(commandBuffer, &barrierImageInfo);
+        vkChk(vkEndCommandBuffer(commandBuffer));
+
+        VkSubmitInfo submitInfo{.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO, .commandBufferCount = 1, .pCommandBuffers = &commandBuffer};
+        VkFence submitFence{};
+        VkFenceCreateInfo submitFenceCI{.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
+        vkChk(vkCreateFence(device, &submitFenceCI, nullptr, &submitFence));
+
+        vkChk(vkQueueSubmit(queue, 1, &submitInfo, submitFence));
+        vkChk(vkWaitForFences(device, 1, &submitFence, VK_TRUE, UINT64_MAX));
+
+        vkDestroyFence(device, submitFence, nullptr);
+        vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
+        vmaDestroyBuffer(allocator, stagingBuffer, stagingBufferAlloc);
+
+        std::uint32_t bindingIndex = textureDescriptorAllocator.getNext(); // todo free when unloading texture
+        allocatedTexture.descriptorIndex = bindingIndex;
+
+        VkDescriptorImageInfo textureImageInfo{.sampler = samplers.linearClamp, .imageView = allocatedTexture.view, .imageLayout = VK_IMAGE_LAYOUT_READ_ONLY_OPTIMAL};
         VkWriteDescriptorSet descriptorWrite{
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstSet = textureDescriptorSet,

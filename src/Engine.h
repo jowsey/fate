@@ -27,13 +27,14 @@ namespace Fate {
     public:
         void run();
 
-        void setActiveScene(std::unique_ptr<Scene> scene);
-
+        [[nodiscard]] Renderer& getRenderer() { return renderer; }
 
         [[nodiscard]] Scene* getActiveScene() const { return activeScene.get(); }
 
+        void setActiveScene(std::unique_ptr<Scene> scene);
+
         SceneObject* buildAssetSceneObject(const std::filesystem::path& path);
 
-        [[nodiscard]] Renderer& getRenderer() { return renderer; }
+        AllocatedTexture* buildCubemap(const std::array<std::filesystem::path, 6>& facePaths);
     };
 }

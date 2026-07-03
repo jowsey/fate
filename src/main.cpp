@@ -1,3 +1,5 @@
+#include <print>
+
 #include "Engine.h"
 #include "Scene.h"
 #include "utils/Paths.h"
@@ -7,6 +9,16 @@ int main(const int argc, char** argv) {
 
     auto mainScene = std::make_unique<Fate::Scene>("Main");
     engine.setActiveScene(std::move(mainScene));
+
+    const auto skybox = engine.buildCubemap({
+        Fate::PathUtils::getEnginePath() / "resources/Textures/Skyboxes/canary_wharf_8k/plusX.jpeg",
+        Fate::PathUtils::getEnginePath() / "resources/Textures/Skyboxes/canary_wharf_8k/minusX.jpeg",
+        Fate::PathUtils::getEnginePath() / "resources/Textures/Skyboxes/canary_wharf_8k/plusY.jpeg",
+        Fate::PathUtils::getEnginePath() / "resources/Textures/Skyboxes/canary_wharf_8k/minusY.jpeg",
+        Fate::PathUtils::getEnginePath() / "resources/Textures/Skyboxes/canary_wharf_8k/plusZ.jpeg",
+        Fate::PathUtils::getEnginePath() / "resources/Textures/Skyboxes/canary_wharf_8k/minusZ.jpeg",
+    });
+    engine.getActiveScene()->setSkybox(skybox);
 
     const auto carModelPath = Fate::PathUtils::getEnginePath() / "resources/Models/mercevo2/1990 Mercedes-Benz 190 Evo II.glb";
     const auto carAsset = engine.buildAssetSceneObject(carModelPath);

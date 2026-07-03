@@ -24,8 +24,8 @@ struct LightData
 
 struct FrameGlobals
 {
-    float4x4 projection;
     float4x4 view;
+    float4x4 projection;
     float3 cameraPosition;
     float _padding; // todo why here specifically?
 
@@ -53,7 +53,7 @@ struct VSOutput
     nointerpolation uint32_t instanceID;
 
     float4 baseColour;
-    float4 position : SV_POSITION;
+    float4 position : SV_Position;
     float3 worldNormal;
     float3 worldTangent;
     float3 worldBitangent;

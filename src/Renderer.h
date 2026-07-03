@@ -2,6 +2,7 @@
 
 #include <vector>
 
+#include "CubemapData.h"
 #include "glm/glm.hpp"
 #include "SDL3/SDL.h"
 #include "SDL3/SDL_video.h"
@@ -32,12 +33,18 @@ namespace Fate {
     };
 
     struct FrameGlobals {
-        glm::mat4 projection;
         glm::mat4 view;
+        glm::mat4 projection;
         glm::vec3 cameraPosition;
         float _padding;
 
         LightData light;
+    };
+
+    struct SkyboxGlobals {
+        glm::mat4 view;
+        glm::mat4 projection;
+        std::uint32_t cubemapIndex;
     };
 
     struct ObjectData {
@@ -62,6 +69,7 @@ namespace Fate {
 
     struct SamplerCollection {
         VkSampler linearRepeat{VK_NULL_HANDLE};
+        VkSampler linearClamp{VK_NULL_HANDLE};
     };
 
     class Renderer {
@@ -103,8 +111,13 @@ namespace Fate {
 
         SamplerCollection samplers{};
 
-        VkPipeline pipeline{VK_NULL_HANDLE};
-        VkPipelineLayout pipelineLayout{VK_NULL_HANDLE};
+        VkPipeline geometryPipeline{VK_NULL_HANDLE};
+        VkPipelineLayout geometryPipelineLayout{VK_NULL_HANDLE};
+        VkShaderModule litShaderModule{VK_NULL_HANDLE};
+
+        VkPipeline skyboxPipeline{VK_NULL_HANDLE};
+        VkPipelineLayout skyboxPipelineLayout{VK_NULL_HANDLE};
+        VkShaderModule skyboxShaderModule{VK_NULL_HANDLE};
 
         VkCommandPool commandPool{VK_NULL_HANDLE};
         std::array<VkCommandBuffer, MaxFramesInFlight> commandBuffers;
@@ -126,19 +139,21 @@ namespace Fate {
         VkDescriptorSetLayout textureDescriptorSetLayout{VK_NULL_HANDLE};
         VkDescriptorSet textureDescriptorSet{VK_NULL_HANDLE};
 
+        SkyboxGlobals skyboxGlobals{};
         FrameGlobals frameGlobals{};
-        std::vector<ObjectData> objectDatas{}; // todo bad naming
+        std::vector<ObjectData> objectDatas{};
+        std::array<AllocatedBuffer, MaxFramesInFlight> skyboxGlobalsBuffers{};
         std::array<AllocatedBuffer, MaxFramesInFlight> frameGlobalsBuffers{};
         std::array<AllocatedBuffer, MaxFramesInFlight> objectDataBuffers{};
         std::array<AllocatedBuffer, MaxFramesInFlight> indirectBuffers{};
 
         std::vector<std::unique_ptr<AllocatedTexture>> allocatedTextures{};
-        VkShaderModule shaderModule{VK_NULL_HANDLE};
 
         glm::ivec2 windowSize{};
 
         glm::dvec3 cameraPosition{2.25f, 0.0f, 5.0f};
         glm::vec3 cameraRotation{0, 35.0f, 0};
+        float cameraHorFovDegs{70.0f};
 
         glm::vec3 lightDir{-0.1f, -0.1f, -1.0f};
         glm::vec4 lightColor{1.0f, 1.0f, 1.0f, 1.0f};
@@ -158,6 +173,8 @@ namespace Fate {
         GPUMeshHandle uploadMesh(const Mesh& mesh);
 
         AllocatedTexture* uploadTexture(const TextureData& texture);
+
+        AllocatedTexture* uploadCubemap(const CubemapData& cubemap);
 
         // todo this should be way more explicit
         bool updateSwapchain{false};

@@ -121,6 +121,7 @@ namespace Fate {
             }
         }
 
+        // todo deduplicate
         if (auto albedoTexture = pullTextureFromMaterial(nodeMaterial, scene, aiTextureType_DIFFUSE)) {
             albedoTexture->colourSpace = TextureColourSpace::SRGB;
             material.albedoMap = renderer.uploadTexture(*albedoTexture);
@@ -158,7 +159,7 @@ namespace Fate {
         std::vector<Vertex> vertices;
         vertices.reserve(mesh->mNumVertices);
         std::vector<std::uint32_t> indices;
-        indices.reserve(mesh->mNumFaces * 3); // todo make it known this is only guaranteed because of aiProcess_Triangulate
+        indices.reserve(mesh->mNumFaces * 3);
 
         for (std::size_t i = 0; i < mesh->mNumVertices; i++) {
             Vertex vertex;
@@ -250,5 +251,21 @@ namespace Fate {
         }
 
         return buildNodeSceneObject(scene->mRootNode, scene);
+    }
+
+    AllocatedTexture* Engine::buildCubemap(const std::array<std::filesystem::path, 6>& facePaths) {
+        CubemapData data{};
+
+        for (std::size_t i = 0; i < 6; ++i) {
+            const auto& path = facePaths[i];
+            std::unique_ptr<std::uint8_t[]> pixels = FileUtils::decodeImageFromPath(path, data.faceWidth, data.faceHeight);
+            if (!pixels) {
+                std::println(stderr, "Failed to load cubemap face from path: {}", path.string());
+                return nullptr;
+            }
+            data.faces[i] = std::move(pixels);
+        }
+
+        return renderer.uploadCubemap(data);
     }
 }

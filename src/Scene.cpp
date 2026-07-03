@@ -20,4 +20,8 @@ namespace Fate {
             addObject(child->getObject());
         }
     }
+
+    void Scene::setSkybox(AllocatedTexture* cubemap) {
+        skyboxCubemap = cubemap;
+    }
 }

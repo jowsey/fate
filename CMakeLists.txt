@@ -41,6 +41,7 @@ add_executable(fate
         src/Vertex.h
         src/IndexAllocator.cpp
         src/IndexAllocator.h
+        src/CubemapData.h
 )
 
 target_compile_definitions(fate PRIVATE
@@ -95,7 +96,7 @@ set(RESOURCE_TIMESTAMP "${CMAKE_CURRENT_BINARY_DIR}/resources.stamp")
 add_custom_command(
         OUTPUT "${RESOURCE_TIMESTAMP}"
         DEPENDS ${RESOURCE_FILES}
-        COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_CURRENT_BINARY_DIR}/dist/resources"
+        COMMAND ${CMAKE_COMMAND} -E remove_directory "${CMAKE_CURRENT_BINARY_DIR}/dist/resources"
         COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/resources" "${CMAKE_CURRENT_BINARY_DIR}/dist/resources"
         COMMAND ${CMAKE_COMMAND} -E touch "${RESOURCE_TIMESTAMP}"
         COMMENT "Copying resources to build directory"
