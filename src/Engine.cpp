@@ -59,27 +59,15 @@ namespace Fate {
 
                 if (texture->mHeight == 0) {
                     // is compressed texture
-                    const std::string_view format = texture->achFormatHint;
-                    std::print(", compressed ({})", format);
+                    std::print(", compressed ({})", texture->achFormatHint);
 
                     const auto buffer = reinterpret_cast<const uint8_t *>(texture->pcData);
                     const std::size_t bufferSize = texture->mWidth;
 
                     std::print(", size {}", FileUtils::prettyBytes(bufferSize));
 
-                    std::unique_ptr<std::uint8_t[]> decodedData;
-
                     std::uint32_t width, height;
-                    if (format == "png") {
-                        decodedData = FileUtils::decodePng(buffer, bufferSize, width, height);
-                    }
-                    else if (format == "jpg") {
-                        decodedData = FileUtils::decodeJpeg(buffer, bufferSize, width, height);
-                    }
-                    else {
-                        std::println(", unsupported format", format);
-                        return std::nullopt;
-                    }
+                    std::unique_ptr<std::uint8_t[]> decodedData = FileUtils::decodeImage(buffer, bufferSize, width, height);
 
                     std::print(", dimensions {}x{}\n", width, height);
 

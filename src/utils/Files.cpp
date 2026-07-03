@@ -8,16 +8,6 @@
 #include <vector>
 
 #define WUFFS_IMPLEMENTATION
-#define WUFFS_CONFIG__MODULES
-#define WUFFS_CONFIG__MODULE__BASE
-//
-#define WUFFS_CONFIG__MODULE__ADLER32
-#define WUFFS_CONFIG__MODULE__CRC32
-#define WUFFS_CONFIG__MODULE__DEFLATE
-#define WUFFS_CONFIG__MODULE__PNG
-#define WUFFS_CONFIG__MODULE__ZLIB
-//
-#define WUFFS_CONFIG__MODULE__JPEG
 #include "wuffs-v0.4.c"
 
 namespace Fate::FileUtils {
@@ -35,84 +25,49 @@ namespace Fate::FileUtils {
     }
 
     namespace {
-        std::unique_ptr<std::uint8_t[]> decodeImageCommon(wuffs_base__image_decoder* dec, wuffs_base__io_buffer* io, std::uint32_t& outWidth, std::uint32_t& outHeight) {
-            wuffs_base__image_config config;
-            auto status = wuffs_base__image_decoder__decode_image_config(dec, &config, io);
-            if (!wuffs_base__status__is_ok(&status)) {
-                std::println(stderr, "failed to decode image header: {}", wuffs_base__status__message(&status));
-                return {};
+        struct RgbaCallbacks final : wuffs_aux::DecodeImageCallbacks {
+            wuffs_base__pixel_format SelectPixfmt(const wuffs_base__image_config&) override {
+                return wuffs_base__make_pixel_format(WUFFS_BASE__PIXEL_FORMAT__RGBA_NONPREMUL);
             }
-
-            outWidth = wuffs_base__pixel_config__width(&config.pixcfg);
-            outHeight = wuffs_base__pixel_config__height(&config.pixcfg);
-
-            wuffs_base__pixel_config__set(
-                &config.pixcfg,
-                WUFFS_BASE__PIXEL_FORMAT__RGBA_NONPREMUL,
-                WUFFS_BASE__PIXEL_SUBSAMPLING__NONE,
-                outWidth,
-                outHeight
-            );
-
-            const std::size_t pixelBufferSize = wuffs_base__pixel_config__pixbuf_len(&config.pixcfg);
-            std::unique_ptr<std::uint8_t[]> pixels = std::make_unique_for_overwrite<std::uint8_t[]>(pixelBufferSize);
-
-            wuffs_base__pixel_buffer pixelBuffer;
-            status = wuffs_base__pixel_buffer__set_from_slice(&pixelBuffer, &config.pixcfg, wuffs_base__make_slice_u8(pixels.get(), pixelBufferSize));
-            if (!wuffs_base__status__is_ok(&status)) {
-                std::println(stderr, "failed to configure pixel buffer layout: {}", wuffs_base__status__message(&status));
-                return {};
-            }
-
-            const std::size_t workBufferSize = wuffs_base__image_decoder__workbuf_len(dec).max_incl;
-            const std::unique_ptr<std::uint8_t[]> workBuffer = std::make_unique_for_overwrite<std::uint8_t[]>(workBufferSize);
-
-            status = wuffs_base__image_decoder__decode_frame(
-                dec,
-                &pixelBuffer,
-                io,
-                WUFFS_BASE__PIXEL_BLEND__SRC,
-                wuffs_base__make_slice_u8(workBuffer.get(), workBufferSize),
-                nullptr
-            );
-            if (!wuffs_base__status__is_ok(&status)) {
-                std::println(stderr, "failed to decode image: {}", wuffs_base__status__message(&status));
-                return {};
-            }
-
-            return pixels;
-        }
-
-        wuffs_base__io_buffer makeReader(const std::uint8_t* data, const std::size_t dataSize) {
-            auto io = wuffs_base__ptr_u8__reader(const_cast<std::uint8_t *>(data), dataSize, true);
-            io.meta.wi = dataSize;
-            return io;
-        }
+        };
     }
 
-    std::unique_ptr<std::uint8_t[]> decodePng(const std::uint8_t* data, const std::size_t dataSize, std::uint32_t& outWidth, std::uint32_t& outHeight) {
-        auto io = makeReader(data, dataSize);
+    std::unique_ptr<std::uint8_t[]> decodeImage(const std::uint8_t* data, const std::size_t dataSize, std::uint32_t& outWidth, std::uint32_t& outHeight) {
+        RgbaCallbacks callbacks;
+        wuffs_aux::sync_io::MemoryInput input(data, dataSize);
+        wuffs_aux::DecodeImageResult result = wuffs_aux::DecodeImage(callbacks, input);
 
-        const auto dec = std::make_unique<wuffs_png__decoder>();
-        const auto status = wuffs_png__decoder__initialize(dec.get(), sizeof(*dec), WUFFS_VERSION, WUFFS_INITIALIZE__DEFAULT_OPTIONS);
-        if (!wuffs_base__status__is_ok(&status)) {
-            std::println(stderr, "Wuffs (png) initialization failed: {}", wuffs_base__status__message(&status));
-            return {};
+        if (!result.error_message.empty()) {
+            std::println(stderr, "failed to decode image: {}", result.error_message);
+            return nullptr;
         }
 
-        return decodeImageCommon(wuffs_png__decoder__upcast_as__wuffs_base__image_decoder(dec.get()), &io, outWidth, outHeight);
+        outWidth = wuffs_base__pixel_config__width(&result.pixbuf.pixcfg);
+        outHeight = wuffs_base__pixel_config__height(&result.pixbuf.pixcfg);
+
+        const wuffs_base__table_u8 table = wuffs_base__pixel_buffer__plane(&result.pixbuf, 0);
+        auto pixels = std::make_unique_for_overwrite<std::uint8_t[]>(table.width * table.height);
+
+        // todo figure out ownership/lifetimes on Wuffs' own buffer
+        for (std::uint32_t y = 0; y < table.height; ++y) {
+            std::memcpy(pixels.get() + y * table.width, table.ptr + y * table.stride, table.width);
+        }
+
+        return pixels;
     }
 
-    std::unique_ptr<std::uint8_t[]> decodeJpeg(const std::uint8_t* data, const std::size_t dataSize, std::uint32_t& outWidth, std::uint32_t& outHeight) {
-        auto io = makeReader(data, dataSize);
-
-        const auto dec = std::make_unique<wuffs_jpeg__decoder>();
-        const auto status = wuffs_jpeg__decoder__initialize(dec.get(), sizeof(*dec), WUFFS_VERSION, WUFFS_INITIALIZE__DEFAULT_OPTIONS);
-        if (!wuffs_base__status__is_ok(&status)) {
-            std::println(stderr, "Wuffs (jpeg) initialization failed: {}", wuffs_base__status__message(&status));
-            return {};
+    std::unique_ptr<std::uint8_t[]> decodeImageFromPath(const std::filesystem::path& path, std::uint32_t& outWidth, std::uint32_t& outHeight) {
+        std::ifstream file(path, std::ios::binary | std::ios::ate);
+        if (!file.is_open()) {
+            throw std::runtime_error("Failed to open image file: " + path.string());
         }
 
-        return decodeImageCommon(wuffs_jpeg__decoder__upcast_as__wuffs_base__image_decoder(dec.get()), &io, outWidth, outHeight);
+        const std::size_t fileSize = file.tellg();
+        std::vector<std::uint8_t> buffer(fileSize);
+        file.seekg(0);
+        file.read(reinterpret_cast<char *>(buffer.data()), fileSize);
+        file.close();
+
+        return decodeImage(buffer.data(), fileSize, outWidth, outHeight);
     }
 }
