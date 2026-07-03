@@ -4,9 +4,9 @@
 
 namespace Fate {
     class Scene {
+        std::string name;
         std::vector<SceneObject *> objects{};
         AllocatedTexture* skyboxCubemap{};
-        std::string name;
 
     public:
         explicit Scene(std::string name);

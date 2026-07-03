@@ -103,8 +103,8 @@ namespace Fate {
 
         Material material;
         nodeMaterial->Get(AI_MATKEY_BASE_COLOR, material.baseColour);
-        nodeMaterial->Get(AI_MATKEY_METALLIC_FACTOR, material.metallic);
         nodeMaterial->Get(AI_MATKEY_ROUGHNESS_FACTOR, material.roughness);
+        nodeMaterial->Get(AI_MATKEY_METALLIC_FACTOR, material.metallic);
 
         aiString alphaMode;
         if (nodeMaterial->Get(AI_MATKEY_GLTF_ALPHAMODE, alphaMode) == AI_SUCCESS) {
@@ -136,16 +136,22 @@ namespace Fate {
             material.mapFlags |= static_cast<std::uint32_t>(MapFlags::HasNormalMap);
         }
 
-        if (auto metallicTexture = pullTextureFromMaterial(nodeMaterial, scene, aiTextureType_METALNESS)) {
-            metallicTexture->colourSpace = TextureColourSpace::Linear;
-            material.metallicMap = renderer.uploadTexture(*metallicTexture);
-            material.mapFlags |= static_cast<std::uint32_t>(MapFlags::HasMetallicMap);
+        if (auto ambientTexture = pullTextureFromMaterial(nodeMaterial, scene, aiTextureType_LIGHTMAP)) {
+            ambientTexture->colourSpace = TextureColourSpace::Linear;
+            material.ambientMap = renderer.uploadTexture(*ambientTexture);
+            material.mapFlags |= static_cast<std::uint32_t>(MapFlags::HasAmbientMap);
         }
 
         if (auto roughnessTexture = pullTextureFromMaterial(nodeMaterial, scene, aiTextureType_DIFFUSE_ROUGHNESS)) {
             roughnessTexture->colourSpace = TextureColourSpace::Linear;
             material.roughnessMap = renderer.uploadTexture(*roughnessTexture);
             material.mapFlags |= static_cast<std::uint32_t>(MapFlags::HasRoughnessMap);
+        }
+
+        if (auto metallicTexture = pullTextureFromMaterial(nodeMaterial, scene, aiTextureType_METALNESS)) {
+            metallicTexture->colourSpace = TextureColourSpace::Linear;
+            material.metallicMap = renderer.uploadTexture(*metallicTexture);
+            material.mapFlags |= static_cast<std::uint32_t>(MapFlags::HasMetallicMap);
         }
 
         if (auto emissiveTexture = pullTextureFromMaterial(nodeMaterial, scene, aiTextureType_EMISSIVE)) {

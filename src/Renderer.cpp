@@ -657,12 +657,15 @@ namespace Fate {
                 ImGui::Text("Normal map:");
                 ImGui::SameLine();
                 ImGui::TextColored(material->normalMap ? ImColor(0, 255, 0) : ImColor(255, 0, 0), "%s", material->normalMap ? "yes" : "no");
-                ImGui::Text("Metallic map:");
+                ImGui::Text("Ambient map:");
                 ImGui::SameLine();
-                ImGui::TextColored(material->metallicMap ? ImColor(0, 255, 0) : ImColor(255, 0, 0), "%s", material->metallicMap ? "yes" : "no");
+                ImGui::TextColored(material->ambientMap ? ImColor(0, 255, 0) : ImColor(255, 0, 0), "%s", material->ambientMap ? "yes" : "no");
                 ImGui::Text("Roughness map:");
                 ImGui::SameLine();
                 ImGui::TextColored(material->roughnessMap ? ImColor(0, 255, 0) : ImColor(255, 0, 0), "%s", material->roughnessMap ? "yes" : "no");
+                ImGui::Text("Metallic map:");
+                ImGui::SameLine();
+                ImGui::TextColored(material->metallicMap ? ImColor(0, 255, 0) : ImColor(255, 0, 0), "%s", material->metallicMap ? "yes" : "no");
                 ImGui::Text("Emissive map:");
                 ImGui::SameLine();
                 ImGui::TextColored(material->emissiveMap ? ImColor(0, 255, 0) : ImColor(255, 0, 0), "%s", material->emissiveMap ? "yes" : "no");
@@ -802,8 +805,8 @@ namespace Fate {
 
         frameGlobals.view = viewMatrix;
         frameGlobals.projection = projectionMatrix;
-
         frameGlobals.cameraPosition = glm::vec3(cameraPosition);
+
         frameGlobals.light = {
             .direction = lightDir,
             .range = 0.0f, // unused
@@ -837,12 +840,13 @@ namespace Fate {
                         .baseColour = mesh->getMaterial()->baseColour,
                         .albedoMapIndex = mesh->getMaterial()->albedoMap ? mesh->getMaterial()->albedoMap->descriptorIndex : 0,
                         .normalMapIndex = mesh->getMaterial()->normalMap ? mesh->getMaterial()->normalMap->descriptorIndex : 0,
-                        .metallicMapIndex = mesh->getMaterial()->metallicMap ? mesh->getMaterial()->metallicMap->descriptorIndex : 0,
+                        .ambientMapIndex = mesh->getMaterial()->ambientMap ? mesh->getMaterial()->ambientMap->descriptorIndex : 0,
                         .roughnessMapIndex = mesh->getMaterial()->roughnessMap ? mesh->getMaterial()->roughnessMap->descriptorIndex : 0,
+                        .metallicMapIndex = mesh->getMaterial()->metallicMap ? mesh->getMaterial()->metallicMap->descriptorIndex : 0,
                         .emissiveMapIndex = mesh->getMaterial()->emissiveMap ? mesh->getMaterial()->emissiveMap->descriptorIndex : 0,
                         .mapFlags = mesh->getMaterial()->mapFlags,
-                        .metallic = mesh->getMaterial()->metallic,
                         .roughness = mesh->getMaterial()->roughness,
+                        .metallic = mesh->getMaterial()->metallic,
                     }
                 };
                 objectDatas.push_back(objectData);

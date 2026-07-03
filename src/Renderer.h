@@ -17,12 +17,13 @@ namespace Fate {
         glm::vec4 baseColour;
         std::uint32_t albedoMapIndex;
         std::uint32_t normalMapIndex;
-        std::uint32_t metallicMapIndex;
+        std::uint32_t ambientMapIndex;
         std::uint32_t roughnessMapIndex;
+        std::uint32_t metallicMapIndex;
         std::uint32_t emissiveMapIndex;
         std::uint32_t mapFlags;
-        float metallic;
         float roughness;
+        float metallic;
     };
 
     struct LightData {

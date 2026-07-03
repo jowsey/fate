@@ -6,12 +6,13 @@ struct MaterialData
     float4 baseColour;
     uint32_t albedoMapIndex;
     uint32_t normalMapIndex;
-    uint32_t metallicMapIndex;
+    uint32_t ambientMapIndex;
     uint32_t roughnessMapIndex;
+    uint32_t metallicMapIndex;
     uint32_t emissiveMapIndex;
-    uint32_t mapFlags; // albedo, normal, metallic, roughness, emissive, -, -, -
-    float metallic;
+    uint32_t mapFlags; // albedo, normal, ambient, roughness, metallic, emissive, -, -
     float roughness;
+    float metallic;
 }
 
 struct LightData
@@ -96,16 +97,18 @@ float4 fragmentMain(VSOutput input, uniform PushConstants pc)
 
     bool hasAlbedoMap = (material.mapFlags & (1 << 0)) != 0;
     bool hasNormalMap = (material.mapFlags & (1 << 1)) != 0;
-    bool hasMetallicMap = (material.mapFlags & (1 << 2)) != 0;
+    bool hasAmbientMap = (material.mapFlags & (1 << 2)) != 0;
     bool hasRoughnessMap = (material.mapFlags & (1 << 3)) != 0;
-    bool hasEmissiveMap = (material.mapFlags & (1 << 4)) != 0;
+    bool hasMetallicMap = (material.mapFlags & (1 << 4)) != 0;
+    bool hasEmissiveMap = (material.mapFlags & (1 << 5)) != 0;
 
     float3x3 TBN = float3x3(normalize(input.worldTangent), normalize(input.worldBitangent), normalize(input.worldNormal));
 
     float4 albedo = (hasAlbedoMap ? textures[NonUniformResourceIndex(material.albedoMapIndex)].Sample(input.uv) : float4(1.0)) * material.baseColour * input.baseColour;
     float3 normal = (hasNormalMap ? normalize(mul(textures[NonUniformResourceIndex(material.normalMapIndex)].Sample(input.uv).xyz * 2.0 - 1.0, TBN)) : normalize(input.worldNormal));
-    float metallic = (hasMetallicMap ? textures[NonUniformResourceIndex(material.metallicMapIndex)].Sample(input.uv).b : 0.0) * material.metallic;
-    float roughness = (hasRoughnessMap ? textures[NonUniformResourceIndex(material.roughnessMapIndex)].Sample(input.uv).g : 0.0) * material.roughness;
+    float ambient = (hasAmbientMap ? textures[NonUniformResourceIndex(material.ambientMapIndex)].Sample(input.uv).r : 1.0);
+    float roughness = (hasRoughnessMap ? textures[NonUniformResourceIndex(material.roughnessMapIndex)].Sample(input.uv).g : 1.0) * material.roughness;
+    float metallic = (hasMetallicMap ? textures[NonUniformResourceIndex(material.metallicMapIndex)].Sample(input.uv).b : 1.0) * material.metallic;
     float3 emissive = (hasEmissiveMap ? textures[NonUniformResourceIndex(material.emissiveMapIndex)].Sample(input.uv).rgb : float3(0.0));
 
     // todo additive array
@@ -139,5 +142,8 @@ float4 fragmentMain(VSOutput input, uniform PushConstants pc)
 
     float3 Lo = (kD * albedo.rgb / PI + specular) * radiance * NdotL;
 
-    return float4(linearToSRGB(ACESFitted(Lo) + emissive), 1.0);
+    float3 ambientLight = float3(0.02) * albedo.rgb * ambient; // todo pull from scene or IBL or something
+
+    float3 finalColor = (Lo + ambientLight) + emissive;
+    return float4(linearToSRGB(ACESFitted(finalColor)), 1.0);
 }
