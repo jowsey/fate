@@ -157,7 +157,7 @@ namespace Fate {
 
         glm::vec3 lightDir{-0.1f, -0.1f, -1.0f};
         glm::vec4 lightColor{1.0f, 1.0f, 1.0f, 1.0f};
-        float lightIntensity{5.0f};
+        float lightIntensity{8.0f};
 
     public:
         Renderer();
