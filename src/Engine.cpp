@@ -6,6 +6,7 @@
 #include "imgui_impl_sdl3.h"
 #include "Material.h"
 #include "Scene.h"
+#include "spdlog/spdlog.h"
 #include "assimp/GltfMaterial.h"
 #include "assimp/Importer.hpp"
 #include "assimp/material.h"
@@ -27,6 +28,7 @@ namespace Fate {
                 ImGui_ImplSDL3_ProcessEvent(&event);
 
                 if (event.type == SDL_EVENT_WINDOW_RESIZED) {
+                    spdlog::debug("Window resized to {}x{}", event.window.data1, event.window.data2);
                     renderer.updateSwapchain = true;
                 }
                 else if (event.type == SDL_EVENT_QUIT) {
@@ -51,25 +53,25 @@ namespace Fate {
     std::optional<TextureData> Engine::pullTextureFromMaterial(const aiMaterial* nodeMaterial, const aiScene* scene, const aiTextureType textureType) {
         aiString texturePath;
         if (nodeMaterial->GetTexture(textureType, 0, &texturePath) == AI_SUCCESS) {
-            std::print("- Found {} texture at {}", aiTextureTypeToString(textureType), texturePath.C_Str());
+            spdlog::debug("Material {} has {} texture at {}", nodeMaterial->GetName().C_Str(), aiTextureTypeToString(textureType), texturePath.C_Str());
 
             if (const aiTexture* texture = scene->GetEmbeddedTexture(texturePath.C_Str())) {
                 // is embedded texture
-                std::print(", embedded");
+                spdlog::trace("⤷ Texture is embedded");
 
                 if (texture->mHeight == 0) {
                     // is compressed texture
-                    std::print(", compressed ({})", texture->achFormatHint);
+                    spdlog::trace("⤷ Texture is compressed ({})", texture->achFormatHint);
 
                     const auto buffer = reinterpret_cast<const uint8_t *>(texture->pcData);
                     const std::size_t bufferSize = texture->mWidth;
 
-                    std::print(", size {}", FileUtils::prettyBytes(bufferSize));
+                    spdlog::trace("⤷ Texture data has size {}", FileUtils::prettyBytes(bufferSize));
 
                     std::uint32_t width, height;
                     std::unique_ptr<std::uint8_t[]> decodedData = FileUtils::decodeImage(buffer, bufferSize, width, height);
 
-                    std::print(", dimensions {}x{}\n", width, height);
+                    spdlog::trace("⤷ Texture has dimensions {}x{}", width, height);
 
                     return TextureData{width, height, std::move(decodedData)};
                 }
@@ -77,7 +79,7 @@ namespace Fate {
                     // is uncompressed texture
                     const auto width = texture->mWidth;
                     const auto height = texture->mHeight;
-                    std::print(", uncompressed, dimensions ({}x{})\n", width, height);
+                    spdlog::trace("⤷ Texture is uncompressed, dimensions {}x{}", width, height);
 
                     // todo guesswork, test
                     const auto pixelData = reinterpret_cast<uint8_t *>(texture->pcData);
@@ -96,7 +98,7 @@ namespace Fate {
         aiString materialName;
         if (nodeMaterial->Get(AI_MATKEY_NAME, materialName) == AI_SUCCESS) {
             std::string nameStr = materialName.C_Str();
-            std::print("Processing material: {}\n", materialName.C_Str());
+            spdlog::debug("Processing material: {}", materialName.C_Str());
         }
 
         Material material;
@@ -236,6 +238,8 @@ namespace Fate {
     SceneObject* Engine::buildAssetSceneObject(const std::filesystem::path& path) {
         static Assimp::Importer importer;
 
+        spdlog::debug("Building asset tree for {}", path.lexically_normal().string());
+
         const aiScene* scene = importer.ReadFile(
             path.string(),
             aiProcess_Triangulate |
@@ -246,7 +250,7 @@ namespace Fate {
         );
 
         if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode) {
-            std::println(stderr, "Error while building asset SceneObject ({}): {}", path.filename().string(), importer.GetErrorString());
+            spdlog::error("Error while building asset: {}", importer.GetErrorString());
             return nullptr;
         }
 
@@ -258,11 +262,14 @@ namespace Fate {
 
         for (std::size_t i = 0; i < 6; ++i) {
             const auto& path = facePaths[i];
+            spdlog::debug("Loading cubemap face {} from {}", i, path.lexically_normal().string());
+
             std::unique_ptr<std::uint8_t[]> pixels = FileUtils::decodeImageFromPath(path, data.faceWidth, data.faceHeight);
             if (!pixels) {
-                std::println(stderr, "Failed to load cubemap face from path: {}", path.string());
+                spdlog::error("Failed to load cubemap face from path: {}", path.lexically_normal().string());
                 return nullptr;
             }
+
             data.faces[i] = std::move(pixels);
         }
 

@@ -1,8 +1,9 @@
 #include "Scene.h"
 
 #include <algorithm>
-#include <print>
 #include <utility>
+
+#include "spdlog/spdlog.h"
 
 namespace Fate {
     Scene::Scene(std::string name) : name(std::move(name)) {
@@ -10,7 +11,7 @@ namespace Fate {
 
     void Scene::addObject(SceneObject& object) {
         if (std::ranges::find(objects, &object) != objects.end()) {
-            std::println("Warning: Scene already contains object \"{}\". Skipping.", object.getName());
+            spdlog::warn("Scene already contains object \"{}\". Skipping.", object.getName());
             return;
         }
 

@@ -26,6 +26,8 @@
 #include "SDL3/SDL_init.h"
 #include "SDL3/SDL_vulkan.h"
 
+#include "spdlog/spdlog.h"
+
 #include "CubemapData.h"
 #include "GPUMeshHandle.h"
 #include "TextureData.h"
@@ -36,7 +38,7 @@
 namespace Fate {
     void Renderer::vkChk(const VkResult result) {
         if (result != VK_SUCCESS) {
-            std::println(stderr, "Vulkan call returned an error ({})", string_VkResult(result));
+            spdlog::error("Vulkan call returned an error ({})", string_VkResult(result));
             std::exit(result);
         }
     }
@@ -45,11 +47,10 @@ namespace Fate {
         if (result < VK_SUCCESS) {
             if (result == VK_ERROR_OUT_OF_DATE_KHR) {
                 updateSwapchain = true;
-                std::println("Swapchain update requested");
                 return;
             }
 
-            std::println(stderr, "Vulkan call returned an error ({}),", string_VkResult(result));
+            spdlog::error("Vulkan call returned an error ({}),", string_VkResult(result));
             std::exit(result);
         }
     }
@@ -73,7 +74,7 @@ namespace Fate {
 
     Renderer::Renderer() {
         if (!(SDL_Init(SDL_INIT_VIDEO) && SDL_Vulkan_LoadLibrary(nullptr))) {
-            std::println(stderr, "Failed to initialize SDL: {}", SDL_GetError());
+            spdlog::error("Failed to initialize SDL: {}", SDL_GetError());
             std::exit(-1);
         }
 
@@ -120,7 +121,7 @@ namespace Fate {
 
         VkPhysicalDeviceProperties2 physDeviceProperties{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
         vkGetPhysicalDeviceProperties2(physicalDevice, &physDeviceProperties);
-        std::println("Selected physical device: {}", physDeviceProperties.properties.deviceName);
+        spdlog::info("Selected physical device: {}", physDeviceProperties.properties.deviceName);
 
         // Find a queue family for graphics
         std::uint32_t queueFamilyCount{0};
@@ -135,7 +136,7 @@ namespace Fate {
         }
 
         if (!SDL_Vulkan_GetPresentationSupport(instance, physicalDevice, queueFamilyIndex)) {
-            std::println(stderr, "Selected device does not support presentation to the window surface");
+            spdlog::error("Selected device does not support presentation to the window surface");
             std::exit(-1);
         }
 
@@ -185,7 +186,7 @@ namespace Fate {
         // Window and surface
         window = SDL_CreateWindow("fate", 1280u, 720u, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
         if (!SDL_Vulkan_CreateSurface(window, instance, nullptr, &surface)) {
-            std::println(stderr, "Failed to create Vulkan surface: {}", SDL_GetError());
+            spdlog::error("Failed to create Vulkan surface: {}", SDL_GetError());
             std::exit(-1);
         }
         SDL_GetWindowSize(window, &windowSize.x, &windowSize.y);
@@ -196,6 +197,8 @@ namespace Fate {
         if (surfaceCaps.currentExtent.width == 0xFFFFFFFF) {
             swapchainExtent = {.width = static_cast<std::uint32_t>(windowSize.x), .height = static_cast<std::uint32_t>(windowSize.y)};
         }
+
+        spdlog::debug("Window created with size {}x{}", windowSize.x, windowSize.y);
 
         // Swap chain
         VkSwapchainCreateInfoKHR swapchainCI{
@@ -212,11 +215,13 @@ namespace Fate {
             .presentMode = VK_PRESENT_MODE_FIFO_KHR
         };
         vkChk(vkCreateSwapchainKHR(device, &swapchainCI, nullptr, &swapchain));
+
         std::uint32_t swapchainImageCount{0};
         vkChk(vkGetSwapchainImagesKHR(device, swapchain, &swapchainImageCount, nullptr));
         swapchainImages.resize(swapchainImageCount);
         vkChk(vkGetSwapchainImagesKHR(device, swapchain, &swapchainImageCount, swapchainImages.data()));
         swapchainImageViews.resize(swapchainImageCount);
+
         for (auto i = 0; i < swapchainImageCount; i++) {
             VkImageViewCreateInfo viewCI{
                 .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
@@ -227,6 +232,8 @@ namespace Fate {
             };
             vkChk(vkCreateImageView(device, &viewCI, nullptr, &swapchainImageViews[i]));
         }
+
+        spdlog::trace("Swapchain created with {} images", swapchainImageCount);
 
         // Depth attachment
         std::vector<VkFormat> idealDepthFormats{VK_FORMAT_D32_SFLOAT_S8_UINT, VK_FORMAT_D24_UNORM_S8_UINT};
@@ -255,6 +262,8 @@ namespace Fate {
         vkChk(vmaCreateImage(allocator, &depthImageCI, &allocCI, &depthImage, &depthImageAllocation, nullptr));
         VkImageViewCreateInfo depthViewCI{.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO, .image = depthImage, .viewType = VK_IMAGE_VIEW_TYPE_2D, .format = depthImageFormat, .subresourceRange{.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT, .levelCount = 1, .layerCount = 1}};
         vkChk(vkCreateImageView(device, &depthViewCI, nullptr, &depthImageView));
+
+        spdlog::debug("Selected depth attachment format {}", string_VkFormat(depthImageFormat));
 
         // Geometry buffers
         VmaAllocationCreateInfo geometryBuffersAllocCI{
@@ -348,6 +357,9 @@ namespace Fate {
             .magFilter = VK_FILTER_LINEAR,
             .minFilter = VK_FILTER_LINEAR,
             .mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR,
+            .addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+            .addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT,
+            .addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT,
             .anisotropyEnable = VK_TRUE,
             .maxAnisotropy = 8.0f,
             .maxLod = VK_LOD_CLAMP_NONE
@@ -468,6 +480,8 @@ namespace Fate {
         };
         vkChk(vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &skyboxPipelineCI, nullptr, &skyboxPipeline));
 
+        spdlog::debug("Graphics pipelines created");
+
         // ImGui general setup
         IMGUI_CHECKVERSION();
         ImGui::CreateContext();
@@ -531,6 +545,8 @@ namespace Fate {
         };
         ImGui_ImplVulkan_Init(&initInfo);
 
+        spdlog::debug("ImGui initialized");
+
         // set window icon
         // todo port to Wuffs
         SDL_Surface* iconSurface = SDL_LoadPNG((PathUtils::getEnginePath() / "resources/Textures/fate-icon.png").string().c_str());
@@ -538,9 +554,13 @@ namespace Fate {
             SDL_SetWindowIcon(window, iconSurface);
             SDL_DestroySurface(iconSurface);
         }
+
+        spdlog::info("Renderer initialised");
     }
 
     Renderer::~Renderer() {
+        spdlog::info("Renderer shutting down");
+
         vkChk(vkDeviceWaitIdle(device));
         for (auto i = 0; i < MaxFramesInFlight; i++) {
             vkDestroyFence(device, fences[i], nullptr);
@@ -1076,7 +1096,7 @@ namespace Fate {
 
     AllocatedTexture* Renderer::uploadTexture(const TextureData& texture) {
         const auto pixelsSize = texture.width * texture.height * 4;
-        std::println("Uploading texture of size {}x{} ({})", texture.width, texture.height, FileUtils::prettyBytes(pixelsSize));
+        spdlog::debug("Uploading texture of size {}x{} ({})", texture.width, texture.height, FileUtils::prettyBytes(pixelsSize));
 
         AllocatedTexture allocatedTexture{};
 
@@ -1208,7 +1228,7 @@ namespace Fate {
 
     AllocatedTexture* Renderer::uploadCubemap(const CubemapData& cubemap) {
         const auto faceBytes = cubemap.faceWidth * cubemap.faceHeight * 4;
-        std::println("Uploading cubemap of size {}x{}[x6] ({})", cubemap.faceWidth, cubemap.faceHeight, FileUtils::prettyBytes(faceBytes * 6));
+        spdlog::debug("Uploading cubemap of size {}x{}[x6] ({})", cubemap.faceWidth, cubemap.faceHeight, FileUtils::prettyBytes(faceBytes * 6));
 
         // todo this can be *heavily* deduplicated, should just run through uploadTexture with some flags
 

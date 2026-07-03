@@ -1,10 +1,24 @@
 #include <print>
 
+#include "spdlog/spdlog.h"
+
 #include "Engine.h"
 #include "Scene.h"
 #include "utils/Paths.h"
 
+#ifdef _WIN32
+#include <Windows.h>
+#endif
+
 int main(const int argc, char** argv) {
+#ifdef _WIN32
+    SetConsoleOutputCP(CP_UTF8);
+#endif
+
+#ifndef NDEBUG // double negative </3
+    spdlog::set_level(spdlog::level::debug);
+#endif
+
     Fate::Engine engine;
 
     auto mainScene = std::make_unique<Fate::Scene>("Main");

@@ -7,6 +7,8 @@
 #include <fstream>
 #include <vector>
 
+#include "spdlog/spdlog.h"
+
 #define WUFFS_IMPLEMENTATION
 #include "wuffs-v0.4.c"
 
@@ -38,7 +40,7 @@ namespace Fate::FileUtils {
         wuffs_aux::DecodeImageResult result = wuffs_aux::DecodeImage(callbacks, input);
 
         if (!result.error_message.empty()) {
-            std::println(stderr, "failed to decode image: {}", result.error_message);
+            spdlog::error("Failed to decode image: {}", result.error_message);
             return nullptr;
         }
 
@@ -59,7 +61,8 @@ namespace Fate::FileUtils {
     std::unique_ptr<std::uint8_t[]> decodeImageFromPath(const std::filesystem::path& path, std::uint32_t& outWidth, std::uint32_t& outHeight) {
         std::ifstream file(path, std::ios::binary | std::ios::ate);
         if (!file.is_open()) {
-            throw std::runtime_error("Failed to open image file: " + path.string());
+            spdlog::error("Failed to open image file: {}", path.string());
+            return nullptr;
         }
 
         const std::size_t fileSize = file.tellg();

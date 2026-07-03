@@ -274,10 +274,21 @@ add_library(wuffs INTERFACE)
 target_include_directories(wuffs INTERFACE ${wuffs_SOURCE_DIR}/release/c)
 target_link_libraries(fate PRIVATE wuffs)
 
+# spdlog
+FetchContent_Declare(
+        spdlog
+        GIT_REPOSITORY https://github.com/gabime/spdlog.git
+        GIT_TAG v1.17.0
+        GIT_SHALLOW TRUE
+        SYSTEM
+)
+
+FetchContent_MakeAvailable(spdlog)
+target_link_libraries(fate PRIVATE spdlog::spdlog)
+
 # CLI11
 FetchContent_Declare(
         CLI11
-        QUIET
         GIT_REPOSITORY https://github.com/CLIUtils/CLI11.git
         GIT_TAG v2.6.2
         GIT_SHALLOW TRUE
