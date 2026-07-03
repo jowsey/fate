@@ -627,12 +627,6 @@ namespace Fate {
                 ImGui::SeparatorText(("Mesh " + std::to_string(i)).c_str());
                 ImGui::Text("%zu vertices, %zu indices", mesh->getVertices().size(), mesh->getIndices().size());
 
-                // todo:
-                // [x] 0.5: equirectangular -> cubemap generator
-                // [ ] 1: display skybox
-                // [ ] 2. camera movement/control
-                // [ ] 3. IBL i guess
-
                 ImGui::SliderFloat("Metallic", &material->metallic, 0.0f, 1.0f);
                 ImGui::SliderFloat("Roughness", &material->roughness, 0.0f, 1.0f);
                 ImGui::ColorEdit4("Base colour", &material->baseColour.x);
