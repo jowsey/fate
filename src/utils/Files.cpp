@@ -14,12 +14,12 @@
 
 namespace Fate::FileUtils {
     std::string prettyBytes(const std::size_t bytes) {
-        constexpr std::array<std::string_view, 5> units = {"B", "KB", "MB", "GB", "TB"};
+        constexpr std::array<std::string_view, 5> units = {"B", "KiB", "MiB", "GiB", "TiB"};
         auto size = static_cast<double>(bytes);
         std::size_t unitIndex = 0;
 
-        while (size >= 1000 && unitIndex < units.size() - 1) {
-            size /= 1000;
+        while (size >= 1024 && unitIndex < units.size() - 1) {
+            size /= 1024;
             ++unitIndex;
         }
 
