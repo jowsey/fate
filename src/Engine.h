@@ -1,5 +1,6 @@
 #pragma once
 #include <filesystem>
+#include <map>
 
 #include "Renderer.h"
 
@@ -13,16 +14,16 @@ namespace Fate {
         Renderer renderer;
         std::unique_ptr<Scene> activeScene;
 
-        std::optional<TextureData> pullTextureFromMaterial(const aiMaterial* nodeMaterial, const aiScene* scene, aiTextureType textureType);
+        std::optional<AllocatedTexture*> tryUploadMaterialTexture(const std::filesystem::path& modelPath, const aiMaterial* nodeMaterial, const aiScene* scene, aiTextureType textureType, TextureColourSpace colourSpace);
 
-        Material processNodeMaterial(const aiMaterial* nodeMaterial, const aiScene* scene);
+        Mesh processNodeMesh(const std::filesystem::path& modelPath, const aiMesh* mesh, const aiScene* scene);
 
-        Mesh processNodeMesh(const aiMesh* mesh, const aiScene* scene);
-
-        SceneObject* buildNodeSceneObject(const aiNode* node, const aiScene* scene);
+        SceneObject* buildNodeSceneObject(const std::filesystem::path& modelPath, const aiNode* node, const aiScene* scene);
 
         double lastTime{0};
         double deltaTime{0};
+
+        std::map<std::string, AllocatedTexture*> textureLoaderCache{};
 
     public:
         void run();

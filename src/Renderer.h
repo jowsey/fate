@@ -76,7 +76,8 @@ namespace Fate {
     class Renderer {
         static constexpr std::uint32_t MaxObjects = 65536;
         static constexpr std::uint32_t MaxTextureDescriptors = 65536;
-        static constexpr std::uint32_t GeometryBuffersSize = 1024 * 1024 * 128; // 128MiB
+        static constexpr std::uint32_t VertexBufferSize = 1024 * 1024 * 256; // 256MiB
+        static constexpr std::uint32_t IndexBufferSize = 1024 * 1024 * 128; // 128MiB
         static constexpr std::uint32_t MaxFramesInFlight{2};
         static constexpr VkFormat FrameImageFormat{VK_FORMAT_B8G8R8A8_UNORM};
 

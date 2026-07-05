@@ -90,19 +90,10 @@ set_target_properties(fate PROPERTIES
 )
 
 # Copy resources to build directory
-file(GLOB_RECURSE RESOURCE_FILES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/resources/*")
-set(RESOURCE_TIMESTAMP "${CMAKE_CURRENT_BINARY_DIR}/resources.stamp")
-
-add_custom_command(
-        OUTPUT "${RESOURCE_TIMESTAMP}"
-        DEPENDS ${RESOURCE_FILES}
-        COMMAND ${CMAKE_COMMAND} -E remove_directory "${CMAKE_CURRENT_BINARY_DIR}/dist/resources"
-        COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/resources" "${CMAKE_CURRENT_BINARY_DIR}/dist/resources"
-        COMMAND ${CMAKE_COMMAND} -E touch "${RESOURCE_TIMESTAMP}"
+add_custom_target(copy_resources
+        COMMAND ${CMAKE_COMMAND} -E copy_directory_if_different "${CMAKE_CURRENT_SOURCE_DIR}/resources" "${CMAKE_CURRENT_BINARY_DIR}/dist/resources"
         COMMENT "Copying resources to build directory"
 )
-
-add_custom_target(copy_resources DEPENDS "${RESOURCE_TIMESTAMP}")
 
 # Compile shaders
 # todo it's kinda yucky that we depend on it being non-recursive to move stuff that doesn't export symbols to lib/

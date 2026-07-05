@@ -1,7 +1,6 @@
 #include "Engine.h"
 
 #include <print>
-#include <iostream>
 
 #include "imgui_impl_sdl3.h"
 #include "Material.h"
@@ -50,17 +49,24 @@ namespace Fate {
         activeScene = std::move(scene);
     }
 
-    std::optional<TextureData> Engine::pullTextureFromMaterial(const aiMaterial* nodeMaterial, const aiScene* scene, const aiTextureType textureType) {
+    std::optional<AllocatedTexture *> Engine::tryUploadMaterialTexture(const std::filesystem::path& modelPath, const aiMaterial* nodeMaterial, const aiScene* scene, const aiTextureType textureType, const TextureColourSpace colourSpace) {
         aiString texturePath;
         if (nodeMaterial->GetTexture(textureType, 0, &texturePath) == AI_SUCCESS) {
             spdlog::debug("Material {} has {} texture at {}", nodeMaterial->GetName().C_Str(), aiTextureTypeToString(textureType), texturePath.C_Str());
+
+            // check cache
+            std::string cacheKey = modelPath.string() + ":" + texturePath.C_Str();
+            if (textureLoaderCache.contains(cacheKey)) {
+                spdlog::trace("⤷ Texture found in cache");
+                return textureLoaderCache.at(cacheKey);
+            }
 
             if (const aiTexture* texture = scene->GetEmbeddedTexture(texturePath.C_Str())) {
                 // is embedded texture
                 spdlog::trace("⤷ Texture is embedded");
 
                 if (texture->mHeight == 0) {
-                    // is compressed texture
+                    // is compressed
                     spdlog::trace("⤷ Texture is compressed ({})", texture->achFormatHint);
 
                     const auto buffer = reinterpret_cast<const uint8_t *>(texture->pcData);
@@ -73,97 +79,48 @@ namespace Fate {
 
                     spdlog::trace("⤷ Texture has dimensions {}x{}", width, height);
 
-                    return TextureData{width, height, std::move(decodedData)};
-                }
-                else {
-                    // is uncompressed texture
-                    const auto width = texture->mWidth;
-                    const auto height = texture->mHeight;
-                    spdlog::trace("⤷ Texture is uncompressed, dimensions {}x{}", width, height);
+                    auto textureData = TextureData{width, height, std::move(decodedData)};
+                    auto textureHandle = renderer.uploadTexture(textureData);
+                    textureLoaderCache[cacheKey] = textureHandle;
 
-                    // todo guesswork, test
-                    const auto pixelData = reinterpret_cast<uint8_t *>(texture->pcData);
-                    std::unique_ptr<std::uint8_t[]> pixels = std::make_unique_for_overwrite<std::uint8_t[]>(width * height * 4);
-                    std::memcpy(pixels.get(), pixelData, width * height * 4);
-                    return TextureData{width, height, std::move(pixels)};
+                    return textureHandle;
                 }
+
+                // is uncompressed
+                const auto width = texture->mWidth;
+                const auto height = texture->mHeight;
+                spdlog::trace("⤷ Texture is uncompressed, dimensions {}x{}", width, height);
+
+                // todo guesswork, test
+                const auto pixelData = reinterpret_cast<uint8_t *>(texture->pcData);
+                std::unique_ptr<std::uint8_t[]> pixels = std::make_unique_for_overwrite<std::uint8_t[]>(width * height * 4);
+                std::memcpy(pixels.get(), pixelData, width * height * 4);
+
+                auto textureData = TextureData{width, height, std::move(pixels)};
+                auto textureHandle = renderer.uploadTexture(textureData);
+                textureLoaderCache[cacheKey] = textureHandle;
+
+                return textureHandle;
             }
+
+            // is non-embedded texture
+            spdlog::trace("⤷ Texture is on disk, path: {}", texturePath.C_Str());
+
+            std::uint32_t width, height;
+            std::filesystem::path absolutePath = modelPath.parent_path() / texturePath.C_Str();
+            std::unique_ptr<std::uint8_t[]> decodedData = FileUtils::decodeImageFromPath(absolutePath.string(), width, height);
+
+            auto textureData = TextureData{width, height, std::move(decodedData)};
+            auto textureHandle = renderer.uploadTexture(textureData);
+            textureLoaderCache[cacheKey] = textureHandle;
+
+            return textureHandle;
         }
 
-        // todo non-embedded textures
         return std::nullopt;
     }
 
-    Material Engine::processNodeMaterial(const aiMaterial* nodeMaterial, const aiScene* scene) {
-        aiString materialName;
-        if (nodeMaterial->Get(AI_MATKEY_NAME, materialName) == AI_SUCCESS) {
-            std::string nameStr = materialName.C_Str();
-            spdlog::debug("Processing material: {}", materialName.C_Str());
-        }
-
-        Material material;
-        nodeMaterial->Get(AI_MATKEY_BASE_COLOR, material.baseColour);
-        nodeMaterial->Get(AI_MATKEY_ROUGHNESS_FACTOR, material.roughness);
-        nodeMaterial->Get(AI_MATKEY_METALLIC_FACTOR, material.metallic);
-
-        aiString alphaMode;
-        if (nodeMaterial->Get(AI_MATKEY_GLTF_ALPHAMODE, alphaMode) == AI_SUCCESS) {
-            const std::string modeStr = alphaMode.C_Str();
-            material.useAlpha = modeStr != "OPAQUE";
-
-            // hack: re-route transmission extension to flat opacity, todo
-            if (!material.useAlpha) {
-                float transmissionFactor;
-                const bool isTransmission = nodeMaterial->Get(AI_MATKEY_TRANSMISSION_FACTOR, transmissionFactor) == AI_SUCCESS;
-
-                if (isTransmission) {
-                    material.useAlpha = true;
-                    material.baseColour.a = 0.01f;
-                }
-            }
-        }
-
-        // todo deduplicate
-        if (auto albedoTexture = pullTextureFromMaterial(nodeMaterial, scene, aiTextureType_DIFFUSE)) {
-            albedoTexture->colourSpace = TextureColourSpace::SRGB;
-            material.albedoMap = renderer.uploadTexture(*albedoTexture);
-            material.mapFlags |= static_cast<std::uint32_t>(MapFlags::HasAlbedoMap);
-        }
-
-        if (auto normalTexture = pullTextureFromMaterial(nodeMaterial, scene, aiTextureType_NORMALS)) {
-            normalTexture->colourSpace = TextureColourSpace::Linear;
-            material.normalMap = renderer.uploadTexture(*normalTexture);
-            material.mapFlags |= static_cast<std::uint32_t>(MapFlags::HasNormalMap);
-        }
-
-        if (auto ambientTexture = pullTextureFromMaterial(nodeMaterial, scene, aiTextureType_LIGHTMAP)) {
-            ambientTexture->colourSpace = TextureColourSpace::Linear;
-            material.ambientMap = renderer.uploadTexture(*ambientTexture);
-            material.mapFlags |= static_cast<std::uint32_t>(MapFlags::HasAmbientMap);
-        }
-
-        if (auto roughnessTexture = pullTextureFromMaterial(nodeMaterial, scene, aiTextureType_DIFFUSE_ROUGHNESS)) {
-            roughnessTexture->colourSpace = TextureColourSpace::Linear;
-            material.roughnessMap = renderer.uploadTexture(*roughnessTexture);
-            material.mapFlags |= static_cast<std::uint32_t>(MapFlags::HasRoughnessMap);
-        }
-
-        if (auto metallicTexture = pullTextureFromMaterial(nodeMaterial, scene, aiTextureType_METALNESS)) {
-            metallicTexture->colourSpace = TextureColourSpace::Linear;
-            material.metallicMap = renderer.uploadTexture(*metallicTexture);
-            material.mapFlags |= static_cast<std::uint32_t>(MapFlags::HasMetallicMap);
-        }
-
-        if (auto emissiveTexture = pullTextureFromMaterial(nodeMaterial, scene, aiTextureType_EMISSIVE)) {
-            emissiveTexture->colourSpace = TextureColourSpace::SRGB;
-            material.emissiveMap = renderer.uploadTexture(*emissiveTexture);
-            material.mapFlags |= static_cast<std::uint32_t>(MapFlags::HasEmissiveMap);
-        }
-
-        return material;
-    }
-
-    Mesh Engine::processNodeMesh(const aiMesh* mesh, const aiScene* scene) {
+    Mesh Engine::processNodeMesh(const std::filesystem::path& modelPath, const aiMesh* mesh, const aiScene* scene) {
         std::vector<Vertex> vertices;
         vertices.reserve(mesh->mNumVertices);
         std::vector<std::uint32_t> indices;
@@ -203,14 +160,73 @@ namespace Fate {
             }
         }
 
+        // Process material
         const aiMaterial* nodeMaterial = scene->mMaterials[mesh->mMaterialIndex];
-        auto meshMaterial = std::make_shared<Material>(processNodeMaterial(nodeMaterial, scene));
 
-        auto newMesh = Mesh(std::move(vertices), std::move(indices), std::move(meshMaterial));
+        aiString materialName;
+        if (nodeMaterial->Get(AI_MATKEY_NAME, materialName) == AI_SUCCESS) {
+            std::string nameStr = materialName.C_Str();
+            spdlog::debug("Processing material: {}", materialName.C_Str());
+        }
+
+        Material material;
+        nodeMaterial->Get(AI_MATKEY_BASE_COLOR, material.baseColour);
+        nodeMaterial->Get(AI_MATKEY_ROUGHNESS_FACTOR, material.roughness);
+        nodeMaterial->Get(AI_MATKEY_METALLIC_FACTOR, material.metallic);
+
+        aiString alphaMode;
+        if (nodeMaterial->Get(AI_MATKEY_GLTF_ALPHAMODE, alphaMode) == AI_SUCCESS) {
+            const std::string modeStr = alphaMode.C_Str();
+            material.useAlpha = modeStr != "OPAQUE";
+
+            // hack: re-route transmission extension to flat opacity, todo
+            if (!material.useAlpha) {
+                float transmissionFactor;
+                const bool isTransmission = nodeMaterial->Get(AI_MATKEY_TRANSMISSION_FACTOR, transmissionFactor) == AI_SUCCESS;
+
+                if (isTransmission) {
+                    material.useAlpha = true;
+                    material.baseColour.a = 0.01f;
+                }
+            }
+        }
+
+        // todo deduplicate
+        if (auto albedoMap = tryUploadMaterialTexture(modelPath, nodeMaterial, scene, aiTextureType_DIFFUSE, TextureColourSpace::SRGB)) {
+            material.albedoMap = *albedoMap;
+            material.mapFlags |= static_cast<std::uint32_t>(MapFlags::HasAlbedoMap);
+        }
+
+        if (auto normalMap = tryUploadMaterialTexture(modelPath, nodeMaterial, scene, aiTextureType_NORMALS, TextureColourSpace::Linear)) {
+            material.normalMap = *normalMap;
+            material.mapFlags |= static_cast<std::uint32_t>(MapFlags::HasNormalMap);
+        }
+
+        if (auto ambientMap = tryUploadMaterialTexture(modelPath, nodeMaterial, scene, aiTextureType_LIGHTMAP, TextureColourSpace::Linear)) {
+            material.ambientMap = *ambientMap;
+            material.mapFlags |= static_cast<std::uint32_t>(MapFlags::HasAmbientMap);
+        }
+
+        if (auto roughnessMap = tryUploadMaterialTexture(modelPath, nodeMaterial, scene, aiTextureType_DIFFUSE_ROUGHNESS, TextureColourSpace::Linear)) {
+            material.roughnessMap = *roughnessMap;
+            material.mapFlags |= static_cast<std::uint32_t>(MapFlags::HasRoughnessMap);
+        }
+
+        if (auto metallicMap = tryUploadMaterialTexture(modelPath, nodeMaterial, scene, aiTextureType_METALNESS, TextureColourSpace::Linear)) {
+            material.metallicMap = *metallicMap;
+            material.mapFlags |= static_cast<std::uint32_t>(MapFlags::HasMetallicMap);
+        }
+
+        if (auto emissiveMap = tryUploadMaterialTexture(modelPath, nodeMaterial, scene, aiTextureType_EMISSIVE, TextureColourSpace::SRGB)) {
+            material.emissiveMap = *emissiveMap;
+            material.mapFlags |= static_cast<std::uint32_t>(MapFlags::HasEmissiveMap);
+        }
+
+        auto newMesh = Mesh(std::move(vertices), std::move(indices), std::make_shared<Material>(material));
         return newMesh;
     }
 
-    SceneObject* Engine::buildNodeSceneObject(const aiNode* node, const aiScene* scene) {
+    SceneObject* Engine::buildNodeSceneObject(const std::filesystem::path& modelPath, const aiNode* node, const aiScene* scene) {
         const auto sceneObject = new SceneObject(node->mName.C_Str());
 
         aiVector3D position;
@@ -226,7 +242,7 @@ namespace Fate {
         for (std::size_t i = 0; i < node->mNumMeshes; i++) {
             const aiMesh* nodeMesh = scene->mMeshes[node->mMeshes[i]];
 
-            auto objectMesh = std::make_shared<Mesh>(processNodeMesh(nodeMesh, scene));
+            auto objectMesh = std::make_shared<Mesh>(processNodeMesh(modelPath, nodeMesh, scene));
             // todo renderer should handle this as required, engine shouldn't know about GPU handles
             objectMesh->setGPUHandle(renderer.uploadMesh(*objectMesh));
 
@@ -234,7 +250,7 @@ namespace Fate {
         }
 
         for (std::size_t i = 0; i < node->mNumChildren; i++) {
-            SceneObject* childObject = buildNodeSceneObject(node->mChildren[i], scene);
+            SceneObject* childObject = buildNodeSceneObject(modelPath, node->mChildren[i], scene);
             childObject->getTransform().setParent(sceneObject->getTransform());
         }
 
@@ -260,7 +276,7 @@ namespace Fate {
             return nullptr;
         }
 
-        return buildNodeSceneObject(scene->mRootNode, scene);
+        return buildNodeSceneObject(path, scene->mRootNode, scene);
     }
 
     AllocatedTexture* Engine::buildCubemap(const std::array<std::filesystem::path, 6>& facePaths) {

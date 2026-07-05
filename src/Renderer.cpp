@@ -66,7 +66,7 @@ namespace Fate {
         std::vector<std::uint32_t> buffer(fileSize / sizeof(std::uint32_t));
 
         file.seekg(0);
-        file.read(reinterpret_cast<char *>(buffer.data()), fileSize);
+        file.read(reinterpret_cast<char*>(buffer.data()), fileSize);
         file.close();
 
         return buffer;
@@ -96,7 +96,7 @@ namespace Fate {
         std::uint32_t sdlExtensionCount{0};
         char const* const* sdlExtensions{SDL_Vulkan_GetInstanceExtensions(&sdlExtensionCount)};
 
-        std::vector<char const *> instanceExtensions(sdlExtensions, sdlExtensions + sdlExtensionCount);
+        std::vector<char const*> instanceExtensions(sdlExtensions, sdlExtensions + sdlExtensionCount);
         instanceExtensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 
         VkInstanceCreateInfo instanceCI{
@@ -165,7 +165,7 @@ namespace Fate {
             .dynamicRendering = true
         };
 
-        const std::vector<const char *> deviceExtensions{VK_KHR_SWAPCHAIN_EXTENSION_NAME};
+        const std::vector<const char*> deviceExtensions{VK_KHR_SWAPCHAIN_EXTENSION_NAME};
         VkDeviceCreateInfo deviceCI{
             .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
             .pNext = &enabledVk13Features,
@@ -270,23 +270,24 @@ namespace Fate {
             .flags = VMA_ALLOCATION_CREATE_MAPPED_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT,
             .usage = VMA_MEMORY_USAGE_AUTO
         };
-        VmaVirtualBlockCreateInfo geometryVirtualBlockCI{.size = GeometryBuffersSize};
 
         VkBufferCreateInfo vertexBufferCI{
             .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-            .size = GeometryBuffersSize,
+            .size = VertexBufferSize,
             .usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
         };
+        VmaVirtualBlockCreateInfo vertexVirtualBlockCI{.size = VertexBufferSize};
         vkChk(vmaCreateBuffer(allocator, &vertexBufferCI, &geometryBuffersAllocCI, &vertexBuffer, &vertexBufferAllocation, &vertexBufferAllocationInfo));
-        vkChk(vmaCreateVirtualBlock(&geometryVirtualBlockCI, &vertexVirtualBlock));
+        vkChk(vmaCreateVirtualBlock(&vertexVirtualBlockCI, &vertexVirtualBlock));
 
         VkBufferCreateInfo indexBufferCI{
             .sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-            .size = GeometryBuffersSize,
+            .size = IndexBufferSize,
             .usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
         };
+        VmaVirtualBlockCreateInfo indexVirtualBlockCI{.size = IndexBufferSize};
         vkChk(vmaCreateBuffer(allocator, &indexBufferCI, &geometryBuffersAllocCI, &indexBuffer, &indexBufferAllocation, &indexBufferAllocationInfo));
-        vkChk(vmaCreateVirtualBlock(&geometryVirtualBlockCI, &indexVirtualBlock));
+        vkChk(vmaCreateVirtualBlock(&indexVirtualBlockCI, &indexVirtualBlock));
 
         // Shader data buffers
         // todo abstract this to helper
@@ -1092,8 +1093,8 @@ namespace Fate {
         VkDeviceSize indexOffset;
         vkChk(vmaVirtualAllocate(indexVirtualBlock, &indexVirtualAllocCI, &indexVirtualAllocation, &indexOffset));
 
-        std::memcpy(static_cast<char *>(vertexBufferAllocationInfo.pMappedData) + vertexOffset, mesh.getVertices().data(), vertexBytes);
-        std::memcpy(static_cast<char *>(indexBufferAllocationInfo.pMappedData) + indexOffset, mesh.getIndices().data(), indexBytes);
+        std::memcpy(static_cast<char*>(vertexBufferAllocationInfo.pMappedData) + vertexOffset, mesh.getVertices().data(), vertexBytes);
+        std::memcpy(static_cast<char*>(indexBufferAllocationInfo.pMappedData) + indexOffset, mesh.getIndices().data(), indexBytes);
 
         return GPUMeshHandle(vertexOffset / sizeof(Vertex), indexOffset / sizeof(std::uint32_t), vertexVirtualAllocation, indexVirtualAllocation);
     }
@@ -1271,7 +1272,7 @@ namespace Fate {
         VmaAllocationInfo stagingBufferAllocInfo{};
         vkChk(vmaCreateBuffer(allocator, &stagingBufferCI, &stagingBufferAllocCI, &stagingBuffer, &stagingBufferAlloc, &stagingBufferAllocInfo));
         for (std::size_t i = 0; i < 6; ++i) {
-            std::memcpy(static_cast<char *>(stagingBufferAllocInfo.pMappedData) + faceBytes * i, cubemap.faces[i].get(), faceBytes);
+            std::memcpy(static_cast<char*>(stagingBufferAllocInfo.pMappedData) + faceBytes * i, cubemap.faces[i].get(), faceBytes);
         }
 
         VkCommandBuffer commandBuffer{};
