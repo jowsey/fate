@@ -5,6 +5,7 @@
 #include "imgui_impl_sdl3.h"
 #include "Material.h"
 #include "Scene.h"
+#include "glm/gtc/packing.hpp"
 #include "spdlog/spdlog.h"
 #include "assimp/GltfMaterial.h"
 #include "assimp/Importer.hpp"
@@ -130,7 +131,12 @@ namespace Fate {
             Vertex vertex;
 
             if (mesh->HasVertexColors(0)) {
-                vertex.baseColour = {mesh->mColors[0][i].r, mesh->mColors[0][i].g, mesh->mColors[0][i].b, mesh->mColors[0][i].a};
+                vertex.baseColour = {
+                    static_cast<std::uint8_t>(std::clamp(mesh->mColors[0][i].r, 0.0f, 1.0f) * 255.0f + 0.5f),
+                    static_cast<std::uint8_t>(std::clamp(mesh->mColors[0][i].g, 0.0f, 1.0f) * 255.0f + 0.5f),
+                    static_cast<std::uint8_t>(std::clamp(mesh->mColors[0][i].b, 0.0f, 1.0f) * 255.0f + 0.5f),
+                    static_cast<std::uint8_t>(std::clamp(mesh->mColors[0][i].a, 0.0f, 1.0f) * 255.0f + 0.5f)
+                };
             }
 
             if (mesh->HasPositions()) {
@@ -138,12 +144,12 @@ namespace Fate {
             }
 
             if (mesh->HasNormals()) {
-                vertex.normal = {mesh->mNormals[i].x, mesh->mNormals[i].y, mesh->mNormals[i].z};
+                vertex.normal = glm::packSnorm3x10_1x2({mesh->mNormals[i].x, mesh->mNormals[i].y, mesh->mNormals[i].z, 0});
             }
 
             if (mesh->HasTangentsAndBitangents()) {
                 const float handedness = (mesh->mNormals[i] ^ mesh->mTangents[i]) * mesh->mBitangents[i] > 0.0f ? 1.0f : -1.0f;
-                vertex.tangent = {mesh->mTangents[i].x, mesh->mTangents[i].y, mesh->mTangents[i].z, handedness};
+                vertex.tangent = glm::packSnorm3x10_1x2({mesh->mTangents[i].x, mesh->mTangents[i].y, mesh->mTangents[i].z, handedness});
             }
 
             if (mesh->HasTextureCoords(0)) {

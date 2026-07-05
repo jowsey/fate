@@ -44,7 +44,7 @@ struct VSInput
 {
     float4 baseColour;
     float3 position;
-    float3 normal;
+    float4 normal;
     float4 tangent;
     float2 uv;
 };
@@ -80,7 +80,7 @@ VSOutput vertexMain(VSInput input, uniform PushConstants pc, uint instanceIndex:
     output.baseColour = input.baseColour;
     output.position = mul(pc.globals->projection, mul(pc.globals->view, mul(object.model, float4(input.position, 1.0))));
 
-    output.worldNormal = normalize(mul(object.inverseTransposeModel, float4(input.normal, 0.0)).xyz);
+    output.worldNormal = normalize(mul(object.inverseTransposeModel, input.normal).xyz);
     output.worldTangent = normalize(mul(object.model, float4(input.tangent.xyz, 0.0)).xyz);
     output.worldBitangent = cross(output.worldNormal, output.worldTangent) * input.tangent.w;
 

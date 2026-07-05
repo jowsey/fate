@@ -2,10 +2,10 @@
 
 namespace Fate {
     struct Vertex {
-        std::array<float, 4> baseColour{1.0f, 1.0f, 1.0f, 1.0f};
+        std::array<std::uint8_t, 4> baseColour{255, 255, 255, 255};
         std::array<float, 3> position{};
-        std::array<float, 3> normal{};
-        std::array<float, 4> tangent{};
+        std::uint32_t normal{};
+        std::uint32_t tangent{};
         std::array<float, 2> texCoord{};
     };
 }

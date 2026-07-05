@@ -400,10 +400,10 @@ namespace Fate {
         };
         VkVertexInputBindingDescription vertexBinding{.binding = 0, .stride = sizeof(Vertex), .inputRate = VK_VERTEX_INPUT_RATE_VERTEX};
         std::vector<VkVertexInputAttributeDescription> vertexAttributes{
-            {.location = 0, .binding = 0, .format = VK_FORMAT_R32G32B32A32_SFLOAT, .offset = offsetof(Vertex, baseColour)},
+            {.location = 0, .binding = 0, .format = VK_FORMAT_R8G8B8A8_UNORM, .offset = offsetof(Vertex, baseColour)},
             {.location = 1, .binding = 0, .format = VK_FORMAT_R32G32B32_SFLOAT, .offset = offsetof(Vertex, position)},
-            {.location = 2, .binding = 0, .format = VK_FORMAT_R32G32B32_SFLOAT, .offset = offsetof(Vertex, normal)},
-            {.location = 3, .binding = 0, .format = VK_FORMAT_R32G32B32A32_SFLOAT, .offset = offsetof(Vertex, tangent)},
+            {.location = 2, .binding = 0, .format = VK_FORMAT_A2B10G10R10_SNORM_PACK32, .offset = offsetof(Vertex, normal)},
+            {.location = 3, .binding = 0, .format = VK_FORMAT_A2B10G10R10_SNORM_PACK32, .offset = offsetof(Vertex, tangent)},
             {.location = 4, .binding = 0, .format = VK_FORMAT_R32G32_SFLOAT, .offset = offsetof(Vertex, texCoord)},
         };
         VkPipelineVertexInputStateCreateInfo vertexInputState{
