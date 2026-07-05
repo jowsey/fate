@@ -68,7 +68,7 @@ namespace Fate::FileUtils {
         const std::size_t fileSize = file.tellg();
         std::vector<std::uint8_t> buffer(fileSize);
         file.seekg(0);
-        file.read(reinterpret_cast<char *>(buffer.data()), fileSize);
+        file.read(reinterpret_cast<char*>(buffer.data()), fileSize);
         file.close();
 
         return decodeImage(buffer.data(), fileSize, outWidth, outHeight);

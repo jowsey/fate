@@ -49,7 +49,7 @@ namespace Fate {
         activeScene = std::move(scene);
     }
 
-    std::optional<AllocatedTexture *> Engine::tryUploadMaterialTexture(const std::filesystem::path& modelPath, const aiMaterial* nodeMaterial, const aiScene* scene, const aiTextureType textureType, const TextureColourSpace colourSpace) {
+    std::optional<AllocatedTexture*> Engine::tryUploadMaterialTexture(const std::filesystem::path& modelPath, const aiMaterial* nodeMaterial, const aiScene* scene, const aiTextureType textureType, const TextureColourSpace colourSpace) {
         aiString texturePath;
         if (nodeMaterial->GetTexture(textureType, 0, &texturePath) == AI_SUCCESS) {
             spdlog::debug("Material {} has {} texture at {}", nodeMaterial->GetName().C_Str(), aiTextureTypeToString(textureType), texturePath.C_Str());
@@ -69,7 +69,7 @@ namespace Fate {
                     // is compressed
                     spdlog::trace("⤷ Texture is compressed ({})", texture->achFormatHint);
 
-                    const auto buffer = reinterpret_cast<const uint8_t *>(texture->pcData);
+                    const auto buffer = reinterpret_cast<const uint8_t*>(texture->pcData);
                     const std::size_t bufferSize = texture->mWidth;
 
                     spdlog::trace("⤷ Texture data has size {}", FileUtils::prettyBytes(bufferSize));
@@ -92,7 +92,7 @@ namespace Fate {
                 spdlog::trace("⤷ Texture is uncompressed, dimensions {}x{}", width, height);
 
                 // todo guesswork, test
-                const auto pixelData = reinterpret_cast<uint8_t *>(texture->pcData);
+                const auto pixelData = reinterpret_cast<uint8_t*>(texture->pcData);
                 std::unique_ptr<std::uint8_t[]> pixels = std::make_unique_for_overwrite<std::uint8_t[]>(width * height * 4);
                 std::memcpy(pixels.get(), pixelData, width * height * 4);
 

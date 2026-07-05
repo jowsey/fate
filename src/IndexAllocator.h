@@ -13,6 +13,6 @@ namespace Fate {
 
         std::uint32_t getNext();
 
-        void free(const std::uint32_t index);
+        void free(std::uint32_t index);
     };
 }

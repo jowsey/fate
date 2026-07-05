@@ -5,7 +5,7 @@
 namespace Fate {
     class Scene {
         std::string name;
-        std::vector<SceneObject *> objects{};
+        std::vector<SceneObject*> objects{};
         AllocatedTexture* skyboxCubemap{};
 
     public:
@@ -13,7 +13,7 @@ namespace Fate {
 
         [[nodiscard]] const std::string& getName() const { return name; }
 
-        [[nodiscard]] const std::vector<SceneObject *>& getObjects() const { return objects; }
+        [[nodiscard]] const std::vector<SceneObject*>& getObjects() const { return objects; }
 
         [[nodiscard]] const AllocatedTexture* getSkybox() const { return skyboxCubemap; }
 

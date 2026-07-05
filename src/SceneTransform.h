@@ -24,7 +24,7 @@ namespace Fate {
         SceneObject* object;
 
         SceneTransform* parent{};
-        std::vector<SceneTransform *> children{};
+        std::vector<SceneTransform*> children{};
 
         void setDirty();
 
@@ -40,7 +40,7 @@ namespace Fate {
 
         [[nodiscard]] SceneTransform* getParent() const { return parent; }
         [[nodiscard]] SceneObject& getObject() const { return *object; }
-        [[nodiscard]] const std::vector<SceneTransform *>& getChildren() const { return children; }
+        [[nodiscard]] const std::vector<SceneTransform*>& getChildren() const { return children; }
 
         void setPosition(const glm::dvec3& pos);
 
