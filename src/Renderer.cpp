@@ -699,7 +699,7 @@ namespace Fate {
 
             if (ImGui::BeginMenu("Help")) {
                 if (ImGui::MenuItem("View on GitHub")) {
-                    PathUtils::openBrowser("https://github.com/jowsey/fate");
+                    SDL_OpenURL("https://github.com/jowsey/fate");
                 }
 
                 ImGui::Separator();
