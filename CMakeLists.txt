@@ -58,16 +58,26 @@ endif ()
 
 # Static linking
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
-target_link_options(fate PRIVATE "-static-libgcc" "-static-libstdc++" "-static")
+if (WIN32)
+    target_link_options(fate PRIVATE "-static")
+endif ()
 
 # Release build optimizations
 if (CMAKE_BUILD_TYPE STREQUAL "Release")
-    # general optimizations
-    target_compile_options(fate PRIVATE -mavx2 -ffast-math)
+    # avx2
+    if (CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
+        target_compile_options(fate PRIVATE -march=x86-64-v3)
+    endif ()
+
+    target_compile_options(fate PRIVATE -ffp-contract=fast -fno-math-errno)
 
     # dead code elimination
-    target_compile_options(fate PRIVATE -ffunction-sections -fdata-sections)
-    target_link_options(fate PRIVATE -Wl,--gc-sections)
+    if (APPLE)
+        target_link_options(fate PRIVATE -Wl,-dead_strip)
+    else ()
+        target_compile_options(fate PRIVATE -ffunction-sections -fdata-sections)
+        target_link_options(fate PRIVATE -Wl,--gc-sections)
+    endif ()
 
     # glm SIMD support
     #    target_compile_definitions(fate PRIVATE
@@ -247,7 +257,11 @@ set(ASSIMP_BUILD_GLTF_IMPORTER ON CACHE BOOL "" FORCE)
 set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(ASSIMP_BUILD_ASSIMP_TOOLS OFF CACHE BOOL "" FORCE)
 set(ASSIMP_INSTALL OFF CACHE BOOL "" FORCE)
-set(ASSIMP_BUILD_ZLIB ON CACHE BOOL "" FORCE)
+if (APPLE)
+    set(ASSIMP_BUILD_ZLIB OFF CACHE BOOL "" FORCE)
+else ()
+    set(ASSIMP_BUILD_ZLIB ON CACHE BOOL "" FORCE)
+endif ()
 
 FetchContent_MakeAvailable(assimp)
 target_link_libraries(fate PRIVATE assimp)
