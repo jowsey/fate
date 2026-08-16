@@ -80,7 +80,7 @@ namespace Fate {
 
                     spdlog::trace("⤷ Texture has dimensions {}x{}", width, height);
 
-                    auto textureData = TextureData{width, height, std::move(decodedData)};
+                    auto textureData = TextureData{width, height, std::move(decodedData), colourSpace};
                     auto textureHandle = renderer.uploadTexture(textureData);
                     textureLoaderCache[cacheKey] = textureHandle;
 
@@ -97,7 +97,7 @@ namespace Fate {
                 std::unique_ptr<std::uint8_t[]> pixels = std::make_unique_for_overwrite<std::uint8_t[]>(width * height * 4);
                 std::memcpy(pixels.get(), pixelData, width * height * 4);
 
-                auto textureData = TextureData{width, height, std::move(pixels)};
+                auto textureData = TextureData{width, height, std::move(pixels), colourSpace};
                 auto textureHandle = renderer.uploadTexture(textureData);
                 textureLoaderCache[cacheKey] = textureHandle;
 
@@ -111,7 +111,7 @@ namespace Fate {
             std::filesystem::path absolutePath = modelPath.parent_path() / texturePath.C_Str();
             std::unique_ptr<std::uint8_t[]> decodedData = FileUtils::decodeImageFromPath(absolutePath.string(), width, height);
 
-            auto textureData = TextureData{width, height, std::move(decodedData)};
+            auto textureData = TextureData{width, height, std::move(decodedData), colourSpace};
             auto textureHandle = renderer.uploadTexture(textureData);
             textureLoaderCache[cacheKey] = textureHandle;
 
