@@ -120,8 +120,11 @@ namespace Fate {
         physicalDevice = devices[physicalDeviceIndex];
 
         VkPhysicalDeviceProperties2 physDeviceProperties{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2};
+        VkPhysicalDeviceDriverProperties driverProperties{.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DRIVER_PROPERTIES};
+        physDeviceProperties.pNext = &driverProperties;
         vkGetPhysicalDeviceProperties2(physicalDevice, &physDeviceProperties);
-        spdlog::info("Selected physical device: {}", physDeviceProperties.properties.deviceName);
+
+        spdlog::info("Selected physical device: {} ({} {})", physDeviceProperties.properties.deviceName, driverProperties.driverName, driverProperties.driverInfo);
 
         // Find a queue family for graphics
         std::uint32_t queueFamilyCount{0};
