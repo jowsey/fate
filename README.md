@@ -4,4 +4,4 @@
     <h1>the Fate game engine</h1>
 </div>
 
-hui guys
+A modern, cross-platform Vulkan renderer & eventual game engine. Expects CMake 4.3+, LLVM/Clang 22, a Vulkan 1.3-compatible device
