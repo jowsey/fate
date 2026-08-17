@@ -149,6 +149,7 @@ namespace Fate {
 
         VkPhysicalDeviceFeatures enabledVk10Features{
             .multiDrawIndirect = VK_TRUE,
+            .drawIndirectFirstInstance = VK_TRUE,
             .samplerAnisotropy = VK_TRUE
         };
         VkPhysicalDeviceVulkan12Features enabledVk12Features{
