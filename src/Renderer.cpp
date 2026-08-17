@@ -579,8 +579,8 @@ namespace Fate {
             vkDestroySemaphore(device, renderCompleteSemaphore, nullptr);
         }
 
-        vmaDestroyImage(allocator, depthImage, depthImageAllocation);
         vkDestroyImageView(device, depthImageView, nullptr);
+        vmaDestroyImage(allocator, depthImage, depthImageAllocation);
         for (const auto& swapchainImageView: swapchainImageViews) {
             vkDestroyImageView(device, swapchainImageView, nullptr);
         }
@@ -1052,8 +1052,8 @@ namespace Fate {
             }
 
             vkDestroySwapchainKHR(device, swapchainCI.oldSwapchain, nullptr);
-            vmaDestroyImage(allocator, depthImage, depthImageAllocation);
             vkDestroyImageView(device, depthImageView, nullptr);
+            vmaDestroyImage(allocator, depthImage, depthImageAllocation);
 
             VkImageCreateInfo depthImageCI{
                 .sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
