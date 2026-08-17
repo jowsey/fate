@@ -16,8 +16,8 @@ namespace Fate {
 
     struct Material {
         glm::vec4 baseColour{1.0f};
-        float roughness;
-        float metallic;
+        float roughness{1.0f};
+        float metallic{0.0f};
 
         // todo this is horrible and needs to die, see Mesh.h
         AllocatedTexture* albedoMap{};
