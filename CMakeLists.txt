@@ -173,7 +173,7 @@ target_link_libraries(fate PRIVATE GPUOpen::VulkanMemoryAllocator)
 FetchContent_Declare(
         sdl3
         GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
-        GIT_TAG release-3.4.12
+        GIT_TAG release-3.4.14
         GIT_SHALLOW TRUE
 )
 
@@ -212,7 +212,7 @@ target_link_libraries(fate PRIVATE glm::glm)
 FetchContent_Declare(
         imgui
         GIT_REPOSITORY https://github.com/ocornut/imgui.git
-        GIT_TAG v1.92.8-docking
+        GIT_TAG v1.92.9b-docking
         GIT_SHALLOW TRUE
 )
 
@@ -296,7 +296,7 @@ target_link_libraries(fate PRIVATE spdlog::spdlog)
 FetchContent_Declare(
         CLI11
         GIT_REPOSITORY https://github.com/CLIUtils/CLI11.git
-        GIT_TAG v2.6.2
+        GIT_TAG v2.7.2
         GIT_SHALLOW TRUE
 )
 
