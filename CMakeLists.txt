@@ -97,6 +97,7 @@ endif ()
 # Build directory
 set_target_properties(fate PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/dist/bin"
+        OUTPUT_NAME "fate-editor"
 )
 
 # Copy resources to build directory
