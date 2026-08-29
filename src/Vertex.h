@@ -1,5 +1,7 @@
 #pragma once
 
+#include <array>
+
 namespace Fate {
     struct Vertex {
         std::array<std::uint8_t, 4> baseColour{255, 255, 255, 255};
