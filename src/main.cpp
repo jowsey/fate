@@ -10,7 +10,10 @@
 
 #include "spdlog/spdlog.h"
 
+#include <glaze/yaml.hpp>
+
 #include "Engine.h"
+#include "FateProject.h"
 #include "Scene.h"
 #include "utils/Paths.h"
 
@@ -35,14 +38,14 @@ int main(const int argc, char** argv) {
     app.set_version_flag("-v,--version", FATE_VERSION);
 
     CLI::App* initCmd = app.add_subcommand("init", "Initialize a new project");
-    initCmd->add_option("name", "Project name")->required();
+    initCmd->add_option("name", "Name of new project")->required();
 
-    try {
-        CLI11_PARSE(app, argc, argv);
-    }
-    catch (const CLI::ParseError& e) {
-        return app.exit(e);
-    }
+    CLI::App* openCmd = app.add_subcommand("open", "Open an existing project");
+    openCmd->add_option("path", "Path of fate project to open")->required();
+
+    app.require_subcommand(1);
+
+    CLI11_PARSE(app, argc, argv);
 
     if (initCmd->parsed()) {
         const auto name = initCmd->get_option("name")->as<std::string>();
@@ -64,9 +67,10 @@ int main(const int argc, char** argv) {
         std::filesystem::copy(Fate::PathUtils::getEnginePath() / "resources/ProjectTemplates/Default", absolutePath, std::filesystem::copy_options::recursive);
 
         // Replace placeholder tags
-        const std::array<std::pair<std::string, std::string>, 1> TagReplacements = {
-            std::make_pair("{{ProjectName}}", name),
-        };
+        const auto TagReplacements = std::to_array<std::pair<std::string, std::string>>({
+            {"{{ProjectName}}", name},
+            {"{{FateVersion}}", FATE_VERSION}
+        });
 
         for (const auto& entry: std::filesystem::recursive_directory_iterator(absolutePath)) {
             if (!entry.is_regular_file()) continue;
@@ -109,33 +113,90 @@ int main(const int argc, char** argv) {
         return 0;
     }
 
-    // Main engine loop
-    Fate::Engine engine;
+    if (openCmd->parsed()) {
+        auto projectPath = openCmd->get_option("path")->as<std::filesystem::path>();
 
-    auto mainScene = std::make_unique<Fate::Scene>("Main");
-    engine.setActiveScene(std::move(mainScene));
+        // Find .fateproject
+        std::filesystem::path fateProjectPath;
+        if (std::filesystem::is_directory(projectPath)) {
+            fateProjectPath = projectPath / ".fateproject";
+            if (!std::filesystem::exists(fateProjectPath)) {
+                for (const auto& entry: std::filesystem::recursive_directory_iterator(projectPath)) {
+                    if (!entry.is_regular_file() || entry.path().filename() != ".fateproject") continue;
 
-    const auto skybox = engine.buildCubemap({
-        Fate::PathUtils::getEnginePath() / "resources/Textures/Skyboxes/canary_wharf_8k/plusX.jpeg",
-        Fate::PathUtils::getEnginePath() / "resources/Textures/Skyboxes/canary_wharf_8k/minusX.jpeg",
-        Fate::PathUtils::getEnginePath() / "resources/Textures/Skyboxes/canary_wharf_8k/plusY.jpeg",
-        Fate::PathUtils::getEnginePath() / "resources/Textures/Skyboxes/canary_wharf_8k/minusY.jpeg",
-        Fate::PathUtils::getEnginePath() / "resources/Textures/Skyboxes/canary_wharf_8k/plusZ.jpeg",
-        Fate::PathUtils::getEnginePath() / "resources/Textures/Skyboxes/canary_wharf_8k/minusZ.jpeg",
-    });
-    engine.getActiveScene()->setSkybox(skybox);
+                    fateProjectPath = entry.path();
+                    break;
+                }
+            }
+        }
+        else {
+            if (projectPath.filename() == ".fateproject") {
+                fateProjectPath = projectPath;
+            }
+            else if (!std::filesystem::exists(projectPath) || std::filesystem::is_directory(projectPath)) {
+                fateProjectPath = projectPath / ".fateproject";
+            }
+        }
 
-    const auto carModelPath = Fate::PathUtils::getEnginePath() / "resources/Models/mercevo2/1990 Mercedes-Benz 190 Evo II.glb";
-    const auto carAsset = engine.buildAssetSceneObject(carModelPath);
-    carAsset->setName("Mercedes-Benz 190 Evo II");
-    carAsset->getTransform().setPosition({-4.0f, -0.5f, 0.0f});
-    engine.getActiveScene()->addObject(*carAsset);
+        if (std::filesystem::exists(fateProjectPath)) {
+            std::string buffer;
+            std::ifstream inFile(fateProjectPath);
+            if (!inFile) {
+                spdlog::error("Failed to open {}", fateProjectPath.string());
+                return 1;
+            }
 
-    const auto helmetModelPath = Fate::PathUtils::getEnginePath() / "resources/Models/damagedhelmet/DamagedHelmet.glb";
-    const auto helmetAsset = engine.buildAssetSceneObject(helmetModelPath);
-    helmetAsset->setName("Damaged Helmet");
-    engine.getActiveScene()->addObject(*helmetAsset);
+            buffer.assign(std::istreambuf_iterator<char>(inFile), std::istreambuf_iterator<char>());
+            inFile.close();
 
-    engine.run();
+            FateProject project{};
+
+            if (auto ec = glz::read_yaml(project, buffer)) {
+                std::string err = glz::format_error(ec, buffer);
+                spdlog::error("Failed to parse {} ({})", fateProjectPath.string(), err);
+                return 1;
+            }
+
+            spdlog::info("Loading project '{}'", project.name);
+            if (project.engineVersion != FATE_VERSION) {
+                spdlog::warn("Project expects fate {}, you are using {}!", project.engineVersion, FATE_VERSION);
+            }
+        }
+        else {
+            spdlog::error("Failed to find {} (not a project directory?)", fateProjectPath.string());
+            return 1;
+        }
+
+        // Main engine loop
+        Fate::Engine engine;
+
+        auto mainScene = std::make_unique<Fate::Scene>("Main");
+        engine.setActiveScene(std::move(mainScene));
+
+        const auto skybox = engine.buildCubemap({
+            Fate::PathUtils::getEnginePath() / "resources/Textures/Skyboxes/canary_wharf_8k/plusX.jpeg",
+            Fate::PathUtils::getEnginePath() / "resources/Textures/Skyboxes/canary_wharf_8k/minusX.jpeg",
+            Fate::PathUtils::getEnginePath() / "resources/Textures/Skyboxes/canary_wharf_8k/plusY.jpeg",
+            Fate::PathUtils::getEnginePath() / "resources/Textures/Skyboxes/canary_wharf_8k/minusY.jpeg",
+            Fate::PathUtils::getEnginePath() / "resources/Textures/Skyboxes/canary_wharf_8k/plusZ.jpeg",
+            Fate::PathUtils::getEnginePath() / "resources/Textures/Skyboxes/canary_wharf_8k/minusZ.jpeg",
+        });
+        engine.getActiveScene()->setSkybox(skybox);
+
+        const auto carModelPath = Fate::PathUtils::getEnginePath() / "resources/Models/mercevo2/1990 Mercedes-Benz 190 Evo II.glb";
+        const auto carAsset = engine.buildAssetSceneObject(carModelPath);
+        carAsset->setName("Mercedes-Benz 190 Evo II");
+        carAsset->getTransform().setPosition({-4.0f, -0.5f, 0.0f});
+        engine.getActiveScene()->addObject(*carAsset);
+
+        const auto helmetModelPath = Fate::PathUtils::getEnginePath() / "resources/Models/damagedhelmet/DamagedHelmet.glb";
+        const auto helmetAsset = engine.buildAssetSceneObject(helmetModelPath);
+        helmetAsset->setName("Damaged Helmet");
+        engine.getActiveScene()->addObject(*helmetAsset);
+
+        engine.run();
+        return 0;
+    }
+
     return 0;
 }

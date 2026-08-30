@@ -295,6 +295,18 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(spdlog)
 target_link_libraries(fate PRIVATE spdlog::spdlog)
 
+# glaze
+FetchContent_Declare(
+        glaze
+        GIT_REPOSITORY https://github.com/stephenberry/glaze.git
+        GIT_TAG v8.3.0
+        GIT_SHALLOW TRUE
+        SYSTEM
+)
+
+FetchContent_MakeAvailable(glaze)
+target_link_libraries(fate PRIVATE glaze::glaze)
+
 # CLI11
 FetchContent_Declare(
         CLI11
