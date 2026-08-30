@@ -131,7 +131,7 @@ int main(const int argc, char** argv) {
     carAsset->getTransform().setPosition({-4.0f, -0.5f, 0.0f});
     engine.getActiveScene()->addObject(*carAsset);
 
-    const auto helmetModelPath = Fate::PathUtils::getEnginePath() / "resources/Models/damagedhelmet/damagedhelmet.glb";
+    const auto helmetModelPath = Fate::PathUtils::getEnginePath() / "resources/Models/damagedhelmet/DamagedHelmet.glb";
     const auto helmetAsset = engine.buildAssetSceneObject(helmetModelPath);
     helmetAsset->setName("Damaged Helmet");
     engine.getActiveScene()->addObject(*helmetAsset);

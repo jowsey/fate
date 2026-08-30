@@ -111,12 +111,15 @@ add_custom_target(copy_resources
 #      find a way to make it recursive but not complain about libs not exporting symbols
 file(GLOB SHADER_FILES CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/src/shaders/*.slang")
 
+set(SHADERS_DIR "${CMAKE_CURRENT_BINARY_DIR}/dist/resources/Shaders")
+
 set(SPIRV_OUTPUTS "")
 foreach (SHADER_FILE IN LISTS SHADER_FILES)
     get_filename_component(SHADER_NAME "${SHADER_FILE}" NAME)
-    set(SPIRV_OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/dist/resources/Shaders/${SHADER_NAME}.spv")
+    set(SPIRV_OUTPUT "${SHADERS_DIR}/${SHADER_NAME}.spv")
     add_custom_command(
             OUTPUT "${SPIRV_OUTPUT}"
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${SHADERS_DIR}"
             COMMAND ${SLANGC_EXE} "${SHADER_FILE}" -target spirv -o "${SPIRV_OUTPUT}"
             DEPENDS "${SHADER_FILE}" "${RESOURCE_TIMESTAMP}"
             COMMENT "Compiling shader ${SHADER_NAME} to SPIR-V"
