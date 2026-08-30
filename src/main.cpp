@@ -8,6 +8,8 @@
 
 #include <CLI/CLI.hpp>
 
+#include <SDL3/SDL_process.h>
+
 #include "spdlog/spdlog.h"
 
 #include <glaze/yaml.hpp>
@@ -53,11 +55,11 @@ int main(const int argc, char** argv) {
         const auto absolutePath = std::filesystem::absolute(relativePath);
 
         if (std::filesystem::exists(absolutePath) && !std::filesystem::is_empty(absolutePath)) {
-            std::cerr << "Cannot create project at " << absolutePath.string() << ": directory is not empty." << std::endl;
+            spdlog::error("Cannot create project at {}: directory is not empty.", absolutePath.string());
             return 1;
         }
 
-        std::cout << "Initializing project '" << name << "' at " << absolutePath.string() << std::endl;
+        spdlog::info("Initializing project '{}' at {}", name, absolutePath.string());
 
         // Build project directory
         if (!std::filesystem::exists(absolutePath)) {
@@ -108,6 +110,16 @@ int main(const int argc, char** argv) {
                     break;
                 }
             }
+        }
+
+        // Initialize git repo
+        const std::string pathStr = absolutePath.string();
+        const char* initArgs[] = {"git", "-C", pathStr.c_str(), "init", "--quiet", nullptr};
+        if (SDL_Process* initProc = SDL_CreateProcess(initArgs, false)) {
+            spdlog::info("Initialising new git repository");
+
+            SDL_WaitProcess(initProc, true, nullptr);
+            SDL_DestroyProcess(initProc);
         }
 
         return 0;
