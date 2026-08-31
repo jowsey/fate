@@ -12,10 +12,7 @@
 
 #include "spdlog/spdlog.h"
 
-#include <glaze/yaml.hpp>
-
 #include "Engine.h"
-#include "FateProject.h"
 #include "Scene.h"
 #include "utils/Paths.h"
 
@@ -128,75 +125,15 @@ int main(const int argc, char** argv) {
     if (openCmd->parsed()) {
         auto projectPath = openCmd->get_option("path")->as<std::filesystem::path>();
 
-        // Find .fateproject
-        std::filesystem::path fateProjectPath;
-        if (std::filesystem::is_directory(projectPath)) {
-            fateProjectPath = projectPath / ".fateproject";
-            if (!std::filesystem::exists(fateProjectPath)) {
-                for (const auto& entry: std::filesystem::recursive_directory_iterator(projectPath)) {
-                    if (!entry.is_regular_file() || entry.path().filename() != ".fateproject") continue;
-
-                    fateProjectPath = entry.path();
-                    break;
-                }
-            }
+        try {
+            Fate::Engine engine(projectPath);
+            engine.run();
         }
-        else {
-            if (projectPath.filename() == ".fateproject") {
-                fateProjectPath = projectPath;
-            }
-            else if (!std::filesystem::exists(projectPath) || std::filesystem::is_directory(projectPath)) {
-                fateProjectPath = projectPath / ".fateproject";
-            }
-        }
-
-        if (std::filesystem::exists(fateProjectPath)) {
-            FateProject project{};
-
-            if (auto ec = glz::read_file_yaml(project, fateProjectPath.string())) {
-                std::string err = glz::format_error(ec);
-                spdlog::error("Failed to parse {} ({})", fateProjectPath.string(), err);
-                return 1;
-            }
-
-            spdlog::info("Loading project '{}'", project.name);
-            if (project.engineVersion != FATE_VERSION) {
-                spdlog::warn("Project expects fate {}, you are using {}!", project.engineVersion, FATE_VERSION);
-            }
-        }
-        else {
-            spdlog::error("Failed to find {} (not a project directory?)", fateProjectPath.string());
+        catch (const std::exception& e) {
+            spdlog::error(e.what());
             return 1;
         }
 
-        // Main engine loop
-        Fate::Engine engine;
-
-        auto mainScene = std::make_unique<Fate::Scene>("Main");
-        engine.setActiveScene(std::move(mainScene));
-
-        const auto skybox = engine.buildCubemap({
-            Fate::PathUtils::getEnginePath() / "resources/Textures/Skyboxes/canary_wharf_8k/plusX.jpeg",
-            Fate::PathUtils::getEnginePath() / "resources/Textures/Skyboxes/canary_wharf_8k/minusX.jpeg",
-            Fate::PathUtils::getEnginePath() / "resources/Textures/Skyboxes/canary_wharf_8k/plusY.jpeg",
-            Fate::PathUtils::getEnginePath() / "resources/Textures/Skyboxes/canary_wharf_8k/minusY.jpeg",
-            Fate::PathUtils::getEnginePath() / "resources/Textures/Skyboxes/canary_wharf_8k/plusZ.jpeg",
-            Fate::PathUtils::getEnginePath() / "resources/Textures/Skyboxes/canary_wharf_8k/minusZ.jpeg",
-        });
-        engine.getActiveScene()->setSkybox(skybox);
-
-        const auto carModelPath = Fate::PathUtils::getEnginePath() / "resources/Models/mercevo2/1990 Mercedes-Benz 190 Evo II.glb";
-        const auto carAsset = engine.buildAssetSceneObject(carModelPath);
-        carAsset->setName("Mercedes-Benz 190 Evo II");
-        carAsset->getTransform().setPosition({-4.0f, -0.5f, 0.0f});
-        engine.getActiveScene()->addObject(*carAsset);
-
-        const auto helmetModelPath = Fate::PathUtils::getEnginePath() / "resources/Models/damagedhelmet/DamagedHelmet.glb";
-        const auto helmetAsset = engine.buildAssetSceneObject(helmetModelPath);
-        helmetAsset->setName("Damaged Helmet");
-        engine.getActiveScene()->addObject(*helmetAsset);
-
-        engine.run();
         return 0;
     }
 

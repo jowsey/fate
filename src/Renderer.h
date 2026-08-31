@@ -162,7 +162,7 @@ namespace Fate {
         float lightIntensity{8.0f};
 
     public:
-        Renderer();
+        Renderer(const std::string& projectName);
 
         ~Renderer();
 

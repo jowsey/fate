@@ -11,7 +11,7 @@ class Scene;
 
 namespace Fate {
     class Engine {
-        Renderer renderer;
+        std::optional<Renderer> renderer;
         std::unique_ptr<Scene> activeScene;
 
         std::optional<AllocatedTexture*> tryUploadMaterialTexture(const std::filesystem::path& modelPath, const aiMaterial* nodeMaterial, const aiScene* scene, aiTextureType textureType, TextureColourSpace colourSpace);
@@ -26,9 +26,11 @@ namespace Fate {
         std::map<std::string, AllocatedTexture*> textureLoaderCache{};
 
     public:
+        explicit Engine(const std::filesystem::path& projectPath);
+
         void run();
 
-        [[nodiscard]] Renderer& getRenderer() { return renderer; }
+        [[nodiscard]] Renderer& getRenderer() { return *renderer; }
 
         [[nodiscard]] Scene* getActiveScene() const { return activeScene.get(); }
 

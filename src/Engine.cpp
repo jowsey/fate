@@ -1,6 +1,12 @@
 #include "Engine.h"
 
 #include <print>
+#include <optional>
+
+#include <glaze/yaml.hpp>
+
+#include "FateProject.h"
+#include <stdexcept>
 
 #include "imgui_impl_sdl3.h"
 #include "Material.h"
@@ -19,6 +25,74 @@
 #include "SDL3/SDL_timer.h"
 
 namespace Fate {
+    static std::expected<FateProject, std::string> loadProjectFile(const std::filesystem::path& projectPath) {
+        std::filesystem::path filePath;
+
+        if (std::filesystem::is_directory(projectPath)) {
+            filePath = projectPath / ".fateproject";
+        }
+        else if (projectPath.filename() == ".fateproject") {
+            filePath = projectPath;
+        }
+        else {
+            return std::unexpected("not a .fateproject file");
+        }
+
+        if (std::filesystem::exists(filePath)) {
+            FateProject project{};
+            if (auto ec = glz::read_file_yaml(project, filePath.string())) {
+                std::string err = glz::format_error(ec);
+                return std::unexpected(std::format("failed to read file: {}", err));
+            }
+
+            return project;
+        }
+
+        return std::unexpected(".fateproject not found");
+    }
+
+    Engine::Engine(const std::filesystem::path& projectPath) {
+        // Load project file
+        auto project = loadProjectFile(projectPath);
+        if (!project) {
+            throw std::runtime_error(std::format("Failed to load project file at {}: {}!", projectPath.string(), project.error()));
+        }
+
+        spdlog::info("Loading project '{}'", project->name);
+
+        if (project->engineVersion != FATE_VERSION) {
+            spdlog::warn("Project expects fate {}, you are using {}!", project->engineVersion, FATE_VERSION);
+        }
+
+        // todo this optional thing kinda ugly. look into Engine init/create method or formalise optional engine modules
+        renderer.emplace(project->name);
+
+        // todo this will all be pulled from a scene file eventually
+        auto mainScene = std::make_unique<Scene>("Main");
+        setActiveScene(std::move(mainScene));
+
+        const auto skybox = buildCubemap({
+            PathUtils::getEnginePath() / "resources/Textures/Skyboxes/canary_wharf_8k/plusX.jpeg",
+            PathUtils::getEnginePath() / "resources/Textures/Skyboxes/canary_wharf_8k/minusX.jpeg",
+            PathUtils::getEnginePath() / "resources/Textures/Skyboxes/canary_wharf_8k/plusY.jpeg",
+            PathUtils::getEnginePath() / "resources/Textures/Skyboxes/canary_wharf_8k/minusY.jpeg",
+            PathUtils::getEnginePath() / "resources/Textures/Skyboxes/canary_wharf_8k/plusZ.jpeg",
+            PathUtils::getEnginePath() / "resources/Textures/Skyboxes/canary_wharf_8k/minusZ.jpeg",
+        });
+        getActiveScene()->setSkybox(skybox);
+
+        const auto carModelPath = PathUtils::getEnginePath() / "resources/Models/mercevo2/1990 Mercedes-Benz 190 Evo II.glb";
+        const auto carAsset = buildAssetSceneObject(carModelPath);
+        carAsset->setName("Mercedes-Benz 190 Evo II");
+        carAsset->getTransform().setPosition({-4.0f, -0.5f, 0.0f});
+        getActiveScene()->addObject(*carAsset);
+
+        const auto helmetModelPath = PathUtils::getEnginePath() / "resources/Models/damagedhelmet/DamagedHelmet.glb";
+        const auto helmetAsset = buildAssetSceneObject(helmetModelPath);
+        helmetAsset->setName("Damaged Helmet");
+        getActiveScene()->addObject(*helmetAsset);
+    }
+
     void Engine::run() {
         bool running = true;
         SDL_Event event; // todo untangle render/engine wrt window
@@ -29,7 +103,7 @@ namespace Fate {
 
                 if (event.type == SDL_EVENT_WINDOW_RESIZED) {
                     spdlog::debug("Window resized to {}x{}", event.window.data1, event.window.data2);
-                    renderer.updateSwapchain = true;
+                    renderer->updateSwapchain = true;
                 }
                 else if (event.type == SDL_EVENT_QUIT) {
                     running = false;
@@ -41,8 +115,8 @@ namespace Fate {
             deltaTime = currentTime - lastTime;
             lastTime = currentTime;
 
-            renderer.buildEditorUI(*activeScene, deltaTime);
-            renderer.render(*activeScene);
+            renderer->buildEditorUI(*activeScene, deltaTime);
+            renderer->render(*activeScene);
         }
     }
 
@@ -81,7 +155,7 @@ namespace Fate {
                     spdlog::trace("⤷ Texture has dimensions {}x{}", width, height);
 
                     auto textureData = TextureData{width, height, std::move(decodedData), colourSpace};
-                    auto textureHandle = renderer.uploadTexture(textureData);
+                    auto textureHandle = renderer->uploadTexture(textureData);
                     textureLoaderCache[cacheKey] = textureHandle;
 
                     return textureHandle;
@@ -98,7 +172,7 @@ namespace Fate {
                 std::memcpy(pixels.get(), pixelData, width * height * 4);
 
                 auto textureData = TextureData{width, height, std::move(pixels), colourSpace};
-                auto textureHandle = renderer.uploadTexture(textureData);
+                auto textureHandle = renderer->uploadTexture(textureData);
                 textureLoaderCache[cacheKey] = textureHandle;
 
                 return textureHandle;
@@ -112,7 +186,7 @@ namespace Fate {
             std::unique_ptr<std::uint8_t[]> decodedData = FileUtils::decodeImageFromPath(absolutePath.string(), width, height);
 
             auto textureData = TextureData{width, height, std::move(decodedData), colourSpace};
-            auto textureHandle = renderer.uploadTexture(textureData);
+            auto textureHandle = renderer->uploadTexture(textureData);
             textureLoaderCache[cacheKey] = textureHandle;
 
             return textureHandle;
@@ -250,7 +324,7 @@ namespace Fate {
 
             auto objectMesh = std::make_shared<Mesh>(processNodeMesh(modelPath, nodeMesh, scene));
             // todo renderer should handle this as required, engine shouldn't know about GPU handles
-            objectMesh->setGPUHandle(renderer.uploadMesh(*objectMesh));
+            objectMesh->setGPUHandle(renderer->uploadMesh(*objectMesh));
 
             sceneObject->addMesh(std::move(objectMesh));
         }
@@ -301,6 +375,6 @@ namespace Fate {
             data.faces[i] = std::move(pixels);
         }
 
-        return renderer.uploadCubemap(data);
+        return renderer->uploadCubemap(data);
     }
 }

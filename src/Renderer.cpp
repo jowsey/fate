@@ -70,7 +70,7 @@ namespace Fate {
         return buffer;
     }
 
-    Renderer::Renderer() {
+    Renderer::Renderer(const std::string& projectName) {
         if (!(SDL_Init(SDL_INIT_VIDEO) && SDL_Vulkan_LoadLibrary(nullptr))) {
             throw std::runtime_error(std::format("Failed to initialize SDL: {}", SDL_GetError()));
         }
@@ -80,7 +80,7 @@ namespace Fate {
         // Instance
         VkApplicationInfo appInfo{
             .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
-            .pApplicationName = "fate", // todo pull from a project file?
+            .pApplicationName = projectName.c_str(),
             .pEngineName = "fate",
             .engineVersion = VK_MAKE_VERSION(FATE_VERSION_MAJOR, FATE_VERSION_MINOR, FATE_VERSION_PATCH),
             .apiVersion = VK_API_VERSION_1_3
@@ -184,7 +184,7 @@ namespace Fate {
         vkChk(vmaCreateAllocator(&allocatorCI, &allocator));
 
         // Window and surface
-        window = SDL_CreateWindow("fate", 1280u, 720u, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
+        window = SDL_CreateWindow(std::format("fate | {}", projectName).c_str(), 1280u, 720u, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
         if (!SDL_Vulkan_CreateSurface(window, instance, nullptr, &surface)) {
             throw std::runtime_error(std::format("Failed to create Vulkan surface: {}", SDL_GetError()));
         }
