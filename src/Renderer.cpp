@@ -38,8 +38,7 @@
 namespace Fate {
     void Renderer::vkChk(const VkResult result) {
         if (result != VK_SUCCESS) {
-            spdlog::error("Vulkan call returned an error ({})", string_VkResult(result));
-            std::exit(result);
+            throw std::runtime_error(std::format("Vulkan call returned an error ({})", string_VkResult(result)));
         }
     }
 
@@ -50,8 +49,7 @@ namespace Fate {
                 return;
             }
 
-            spdlog::error("Vulkan call returned an error ({}),", string_VkResult(result));
-            std::exit(result);
+            throw std::runtime_error(std::format("Vulkan call returned an error ({})", string_VkResult(result)));
         }
     }
 
@@ -59,7 +57,7 @@ namespace Fate {
         std::ifstream file(path, std::ios::ate | std::ios::binary);
 
         if (!file.is_open()) {
-            throw std::runtime_error("Failed to open shader file: " + path.string());
+            throw std::runtime_error(std::format("Failed to open shader file: {}", path.string()));
         }
 
         const std::size_t fileSize = file.tellg();
@@ -74,8 +72,7 @@ namespace Fate {
 
     Renderer::Renderer() {
         if (!(SDL_Init(SDL_INIT_VIDEO) && SDL_Vulkan_LoadLibrary(nullptr))) {
-            spdlog::error("Failed to initialize SDL: {}", SDL_GetError());
-            std::exit(-1);
+            throw std::runtime_error(std::format("Failed to initialize SDL: {}", SDL_GetError()));
         }
 
         volkInitialize();
@@ -139,8 +136,7 @@ namespace Fate {
         }
 
         if (!SDL_Vulkan_GetPresentationSupport(instance, physicalDevice, queueFamilyIndex)) {
-            spdlog::error("Selected device does not support presentation to the window surface");
-            std::exit(-1);
+            throw std::runtime_error("Selected device does not support presentation to the window surface");
         }
 
         // Logical device
@@ -190,8 +186,7 @@ namespace Fate {
         // Window and surface
         window = SDL_CreateWindow("fate", 1280u, 720u, SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE);
         if (!SDL_Vulkan_CreateSurface(window, instance, nullptr, &surface)) {
-            spdlog::error("Failed to create Vulkan surface: {}", SDL_GetError());
-            std::exit(-1);
+            throw std::runtime_error(std::format("Failed to create Vulkan surface: {}", SDL_GetError()));
         }
         SDL_GetWindowSize(window, &windowSize.x, &windowSize.y);
 
