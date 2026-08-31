@@ -68,11 +68,6 @@ namespace Fate {
         std::uint32_t descriptorIndex{0};
     };
 
-    struct SamplerCollection {
-        VkSampler linearRepeat{VK_NULL_HANDLE};
-        VkSampler linearClamp{VK_NULL_HANDLE};
-    };
-
     class Renderer {
         static constexpr std::uint32_t MaxObjects = 65536;
         static constexpr std::uint32_t MaxTextureDescriptors = 65536;
@@ -111,7 +106,10 @@ namespace Fate {
         VmaAllocation depthImageAllocation;
         VkImageView depthImageView;
 
-        SamplerCollection samplers{};
+        struct SamplerCollection {
+            VkSampler linearRepeat{VK_NULL_HANDLE};
+            VkSampler linearClamp{VK_NULL_HANDLE};
+        } samplers{};
 
         VkPipeline geometryPipeline{VK_NULL_HANDLE};
         VkPipelineLayout geometryPipelineLayout{VK_NULL_HANDLE};
