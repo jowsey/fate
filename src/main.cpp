@@ -151,20 +151,10 @@ int main(const int argc, char** argv) {
         }
 
         if (std::filesystem::exists(fateProjectPath)) {
-            std::string buffer;
-            std::ifstream inFile(fateProjectPath);
-            if (!inFile) {
-                spdlog::error("Failed to open {}", fateProjectPath.string());
-                return 1;
-            }
-
-            buffer.assign(std::istreambuf_iterator<char>(inFile), std::istreambuf_iterator<char>());
-            inFile.close();
-
             FateProject project{};
 
-            if (auto ec = glz::read_yaml(project, buffer)) {
-                std::string err = glz::format_error(ec, buffer);
+            if (auto ec = glz::read_file_yaml(project, fateProjectPath.string())) {
+                std::string err = glz::format_error(ec);
                 spdlog::error("Failed to parse {} ({})", fateProjectPath.string(), err);
                 return 1;
             }
