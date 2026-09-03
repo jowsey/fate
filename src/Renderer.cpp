@@ -1,10 +1,8 @@
 #include "Renderer.h"
 
 #include <print>
-#include <deque>
 #include <fstream>
 #include <iostream>
-#include <numeric>
 #include <vector>
 
 #define VOLK_IMPLEMENTATION
@@ -53,7 +51,7 @@ namespace Fate {
         }
     }
 
-    std::vector<std::uint32_t> loadShader(const std::filesystem::path& path) {
+    static std::vector<std::uint32_t> loadShader(const std::filesystem::path& path) {
         std::ifstream file(path, std::ios::ate | std::ios::binary);
 
         if (!file.is_open()) {
@@ -624,160 +622,29 @@ namespace Fate {
         vkDestroyInstance(instance, nullptr);
     }
 
-    void DrawSceneHierarchyNode(SceneTransform& transform) {
-        if (ImGui::TreeNode(transform.getObject().getName().c_str())) {
-            auto position = transform.getPosition();
-            auto eulerAngles = transform.getEulerAngles();
-            auto scale = transform.getLocalScale();
-
-            if (ImGui::DragScalarN("Position", ImGuiDataType_Double, &position.x, 3, 0.01f)) {
-                transform.setPosition(position);
-            }
-            if (ImGui::DragFloat3("Rotation", &eulerAngles.x, 0.1f)) {
-                transform.setEulerAngles(eulerAngles);
-            }
-            if (ImGui::DragFloat3("Scale", &scale.x, 0.01f)) {
-                transform.setLocalScale(scale);
-            }
-
-            for (std::size_t i = 0; i < transform.getObject().getMeshes().size(); ++i) {
-                const auto mesh = transform.getObject().getMeshes()[i];
-                const auto material = mesh->getMaterial();
-
-                ImGui::SeparatorText(("Mesh " + std::to_string(i)).c_str());
-                ImGui::Text("%zu vertices, %zu indices", mesh->getVertices().size(), mesh->getIndices().size());
-
-                ImGui::SliderFloat("Metallic", &material->metallic, 0.0f, 1.0f);
-                ImGui::SliderFloat("Roughness", &material->roughness, 0.0f, 1.0f);
-                ImGui::ColorEdit4("Base colour", &material->baseColour.x);
-
-                ImGui::Text("Albedo map:");
-                ImGui::SameLine();
-                ImGui::TextColored(material->albedoMap ? ImColor(0, 255, 0) : ImColor(255, 0, 0), "%s", material->albedoMap ? "yes" : "no");
-                ImGui::Text("Normal map:");
-                ImGui::SameLine();
-                ImGui::TextColored(material->normalMap ? ImColor(0, 255, 0) : ImColor(255, 0, 0), "%s", material->normalMap ? "yes" : "no");
-                ImGui::Text("Ambient map:");
-                ImGui::SameLine();
-                ImGui::TextColored(material->ambientMap ? ImColor(0, 255, 0) : ImColor(255, 0, 0), "%s", material->ambientMap ? "yes" : "no");
-                ImGui::Text("Roughness map:");
-                ImGui::SameLine();
-                ImGui::TextColored(material->roughnessMap ? ImColor(0, 255, 0) : ImColor(255, 0, 0), "%s", material->roughnessMap ? "yes" : "no");
-                ImGui::Text("Metallic map:");
-                ImGui::SameLine();
-                ImGui::TextColored(material->metallicMap ? ImColor(0, 255, 0) : ImColor(255, 0, 0), "%s", material->metallicMap ? "yes" : "no");
-                ImGui::Text("Emissive map:");
-                ImGui::SameLine();
-                ImGui::TextColored(material->emissiveMap ? ImColor(0, 255, 0) : ImColor(255, 0, 0), "%s", material->emissiveMap ? "yes" : "no");
-            }
-
-            for (SceneTransform* childTransform: transform.getChildren()) {
-                DrawSceneHierarchyNode(*childTransform);
-            }
-
-            ImGui::TreePop();
-        }
-    }
-
-    // todo this should probably be in Engine and call in to Renderer separately
-    void Renderer::buildEditorUI(const Scene& scene, const double deltaTime) {
+    void Renderer::beginFrame() {
         ImGui_ImplVulkan_NewFrame();
         ImGui_ImplSDL3_NewFrame();
         ImGui::NewFrame();
+    }
 
-        if (ImGui::BeginMainMenuBar()) {
-            if (ImGui::BeginMenu("File")) {
-                if (ImGui::MenuItem("Exit")) {
-                    SDL_Event quitEvent;
-                    quitEvent.type = SDL_EVENT_QUIT;
-                    SDL_PushEvent(&quitEvent);
-                }
+    GeometryBufferUsage Renderer::getGeometryBufferUsage() const {
+        // todo profile, maybe cache
+        VmaStatistics vertexBufferStats{};
+        vmaGetVirtualBlockStatistics(vertexVirtualBlock, &vertexBufferStats);
+        VmaStatistics indexBufferStats{};
+        vmaGetVirtualBlockStatistics(indexVirtualBlock, &indexBufferStats);
 
-                ImGui::EndMenu();
-            }
-
-            if (ImGui::BeginMenu("Help")) {
-                if (ImGui::MenuItem("View on GitHub")) {
-                    SDL_OpenURL("https://github.com/jowsey/fate");
-                }
-
-                ImGui::Separator();
-
-                ImGui::MenuItem("the Fate game engine", nullptr, nullptr, false);
-                ImGui::MenuItem("v" FATE_VERSION, nullptr, nullptr, false);
-
-                ImGui::EndMenu();
-            }
-
-            constexpr std::uint32_t frameBacklog{5};
-            static std::deque<double> deltaTimeBuffer(frameBacklog);
-            if (deltaTimeBuffer.size() >= frameBacklog) {
-                deltaTimeBuffer.pop_front();
-            }
-            deltaTimeBuffer.push_back(deltaTime);
-
-            const double averageDeltaTime = deltaTimeBuffer.empty()
-                                                ? 0.0
-                                                : std::accumulate(deltaTimeBuffer.begin(), deltaTimeBuffer.end(), 0.0) / deltaTimeBuffer.size();
-
-            const std::string fpsString = std::format("{:.3} fps", 1.0 / averageDeltaTime);
-            const float fpsSize = ImGui::CalcTextSize(fpsString.c_str()).x;
-            ImGui::SetCursorPosX(ImGui::GetWindowWidth() - fpsSize - 8.0f);
-            ImGui::TextUnformatted(fpsString.c_str());
-
-            ImGui::EndMainMenuBar();
+        GeometryBufferUsage usage;
+        usage.vertexBytes = vertexBufferStats.allocationBytes;
+        usage.indexBytes = indexBufferStats.allocationBytes;
+        if (vertexBufferStats.blockBytes > 0) {
+            usage.vertexFraction = static_cast<float>(vertexBufferStats.allocationBytes) / static_cast<float>(vertexBufferStats.blockBytes);
         }
-
-        ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
-
-        ImGui::Begin("Debug");
-
-        ImGui::DragScalarN("Camera position", ImGuiDataType_Double, &cameraPosition, 3, 0.01f);
-        ImGui::DragFloat3("Camera rotation", &cameraRotation.x, 0.1f);
-        ImGui::DragFloat("Camera FOV", &cameraHorFovDegs, 0.1f);
-
-        ImGui::DragFloat3("Light direction", &lightDir.x, 0.01f);
-        ImGui::ColorEdit3("Light colour", &lightColor.x);
-        ImGui::DragFloat("Light intensity", &lightIntensity, 0.01f);
-
-        if (ImGui::CollapsingHeader("Hierarchy", nullptr, ImGuiTreeNodeFlags_DefaultOpen)) {
-            for (SceneObject* object: scene.getObjects()) {
-                if (object->getTransform().getParent() != nullptr) continue;
-                DrawSceneHierarchyNode(object->getTransform());
-            }
+        if (indexBufferStats.blockBytes > 0) {
+            usage.indexFraction = static_cast<float>(indexBufferStats.allocationBytes) / static_cast<float>(indexBufferStats.blockBytes);
         }
-
-        if (ImGui::CollapsingHeader("Resource usage", nullptr, ImGuiTreeNodeFlags_DefaultOpen)) {
-            // todo profile, maybe cache
-            VmaStatistics vertexBufferStats;
-            vmaGetVirtualBlockStatistics(vertexVirtualBlock, &vertexBufferStats);
-            VmaStatistics indexBufferStats;
-            vmaGetVirtualBlockStatistics(indexVirtualBlock, &indexBufferStats);
-
-            const float vertexUsage = static_cast<float>(vertexBufferStats.allocationBytes) / static_cast<float>(vertexBufferStats.blockBytes);
-            const float indexUsage = static_cast<float>(indexBufferStats.allocationBytes) / static_cast<float>(indexBufferStats.blockBytes);
-
-            ImGui::ProgressBar(
-                vertexUsage,
-                ImVec2(-1.0f, 0.0f),
-                std::format("Vertex buffer: {} ({:.3f}%)", FileUtils::prettyBytes(vertexBufferStats.allocationBytes), vertexUsage * 100.0f).c_str()
-            );
-
-            ImGui::ProgressBar(
-                indexUsage,
-                ImVec2(-1.0f, 0.0f),
-                std::format("Index buffer: {} ({:.3f}%)", FileUtils::prettyBytes(indexBufferStats.allocationBytes), indexUsage * 100.0f).c_str()
-            );
-
-            // todo can we pull from descriptor set? or store manually again
-            // ImGui::ProgressBar(
-            //     0.0f,
-            //     ImVec2(-1.0f, 0.0f),
-            //     std::format("Texture usage: {}", FileUtils::prettyBytes(textureUploadedBytes)).c_str()
-            // );
-        }
-
-        ImGui::End();
+        return usage;
     }
 
     void Renderer::render(const Scene& scene) {

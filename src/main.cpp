@@ -12,7 +12,7 @@
 
 #include "spdlog/spdlog.h"
 
-#include "Engine.h"
+#include "Editor.h"
 #include "Scene.h"
 #include "utils/Paths.h"
 
@@ -131,8 +131,8 @@ int main(const int argc, char** argv) {
         auto projectPath = openCmd->get_option("path")->as<std::filesystem::path>();
 
         try {
-            Fate::Engine engine(projectPath);
-            engine.run();
+            Fate::Editor editor(projectPath);
+            editor.run();
         }
         catch (const std::exception& e) {
             spdlog::error(e.what());

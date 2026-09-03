@@ -25,6 +25,10 @@ add_executable(fate
         src/utils/Files.h
         src/Engine.cpp
         src/Engine.h
+        src/Editor.cpp
+        src/Editor.h
+        src/EditorUI.cpp
+        src/EditorUI.h
         src/Renderer.cpp
         src/Renderer.h
         src/GPUMeshHandle.h

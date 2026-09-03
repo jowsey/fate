@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <vector>
 
 #include "CubemapData.h"
@@ -66,6 +67,13 @@ namespace Fate {
         VkImageView view{VK_NULL_HANDLE};
         VmaAllocation allocation{VK_NULL_HANDLE};
         std::uint32_t descriptorIndex{0};
+    };
+
+    struct GeometryBufferUsage {
+        float vertexFraction{0};
+        std::size_t vertexBytes{0};
+        float indexFraction{0};
+        std::size_t indexBytes{0};
     };
 
     class Renderer {
@@ -164,11 +172,20 @@ namespace Fate {
 
         ~Renderer();
 
-        void buildEditorUI(const Scene& scene, double deltaTime);
+        void beginFrame();
 
         void render(const Scene& scene);
 
         [[nodiscard]] SDL_Window* getWindow() const { return window; }
+
+        glm::dvec3& getCameraPosition() { return cameraPosition; }
+        glm::vec3& getCameraRotation() { return cameraRotation; }
+        float& getCameraHorFovDegs() { return cameraHorFovDegs; }
+        glm::vec3& getLightDir() { return lightDir; }
+        glm::vec4& getLightColor() { return lightColor; }
+        float& getLightIntensity() { return lightIntensity; }
+
+        [[nodiscard]] GeometryBufferUsage getGeometryBufferUsage() const;
 
         GPUMeshHandle uploadMesh(const Mesh& mesh);
 

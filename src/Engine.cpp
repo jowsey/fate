@@ -1,12 +1,6 @@
 #include "Engine.h"
 
-#include <print>
 #include <optional>
-
-#include <glaze/yaml.hpp>
-
-#include "FateProject.h"
-#include <stdexcept>
 
 #include "imgui_impl_sdl3.h"
 #include "Material.h"
@@ -25,47 +19,9 @@
 #include "SDL3/SDL_timer.h"
 
 namespace Fate {
-    static std::expected<FateProject, std::string> loadProjectFile(const std::filesystem::path& projectPath) {
-        std::filesystem::path filePath;
-
-        if (std::filesystem::is_directory(projectPath)) {
-            filePath = projectPath / ".fateproject";
-        }
-        else if (projectPath.filename() == ".fateproject") {
-            filePath = projectPath;
-        }
-        else {
-            return std::unexpected("not a .fateproject file");
-        }
-
-        if (std::filesystem::exists(filePath)) {
-            FateProject project{};
-            if (auto ec = glz::read_file_yaml(project, filePath.string())) {
-                std::string err = glz::format_error(ec);
-                return std::unexpected(std::format("failed to read file: {}", err));
-            }
-
-            return project;
-        }
-
-        return std::unexpected(".fateproject not found");
-    }
-
-    Engine::Engine(const std::filesystem::path& projectPath) {
-        // Load project file
-        auto project = loadProjectFile(projectPath);
-        if (!project) {
-            throw std::runtime_error(std::format("Failed to load project file at {}: {}!", projectPath.string(), project.error()));
-        }
-
-        spdlog::info("Loading project '{}'", project->name);
-
-        if (project->engineVersion != FATE_VERSION) {
-            spdlog::warn("Project expects fate {}, you are using {}!", project->engineVersion, FATE_VERSION);
-        }
-
+    Engine::Engine(const std::string& projectName) {
         // todo this optional thing kinda ugly. look into Engine init/create method or formalise optional engine modules
-        renderer.emplace(project->name);
+        renderer.emplace(projectName);
 
         // todo this will all be pulled from a scene file eventually
         auto mainScene = std::make_unique<Scene>("Main");
@@ -93,31 +49,35 @@ namespace Fate {
         getActiveScene()->addObject(*helmetAsset);
     }
 
-    void Engine::run() {
-        bool running = true;
+    bool Engine::beginFrame() {
+        bool quitRequested = false;
         SDL_Event event; // todo untangle render/engine wrt window
 
-        while (running) {
-            while (SDL_PollEvent(&event)) {
-                ImGui_ImplSDL3_ProcessEvent(&event);
+        while (SDL_PollEvent(&event)) {
+            ImGui_ImplSDL3_ProcessEvent(&event);
 
-                if (event.type == SDL_EVENT_WINDOW_RESIZED) {
-                    spdlog::debug("Window resized to {}x{}", event.window.data1, event.window.data2);
-                    renderer->updateSwapchain = true;
-                }
-                else if (event.type == SDL_EVENT_QUIT) {
-                    running = false;
-                    break;
-                }
+            if (event.type == SDL_EVENT_WINDOW_RESIZED) {
+                spdlog::debug("Window resized to {}x{}", event.window.data1, event.window.data2);
+                renderer->updateSwapchain = true;
+            } else if (event.type == SDL_EVENT_QUIT) {
+                quitRequested = true;
             }
-
-            const double currentTime = static_cast<double>(SDL_GetPerformanceCounter()) / static_cast<double>(SDL_GetPerformanceFrequency());
-            deltaTime = currentTime - lastTime;
-            lastTime = currentTime;
-
-            renderer->buildEditorUI(*activeScene, deltaTime);
-            renderer->render(*activeScene);
         }
+
+        if (quitRequested) {
+            return false;
+        }
+
+        const double currentTime = static_cast<double>(SDL_GetPerformanceCounter()) / static_cast<double>(SDL_GetPerformanceFrequency());
+        deltaTime = currentTime - lastTime;
+        lastTime = currentTime;
+
+        renderer->beginFrame();
+        return true;
+    }
+
+    void Engine::endFrame() {
+        renderer->render(*activeScene);
     }
 
     void Engine::setActiveScene(std::unique_ptr<Scene> scene) {
