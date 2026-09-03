@@ -267,6 +267,9 @@ else ()
     set(ASSIMP_BUILD_ZLIB ON CACHE BOOL "" FORCE)
 endif ()
 
+# mitigate stricter transitive includes on llvm 23, remove once assimp updates
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -include ostream")
+
 FetchContent_MakeAvailable(assimp)
 target_link_libraries(fate PRIVATE assimp)
 
