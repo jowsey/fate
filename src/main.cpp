@@ -58,9 +58,14 @@ int main(const int argc, char** argv) {
 
         spdlog::info("Initializing project '{}' at {}", name, absolutePath.string());
 
-        // Build project directory
+        // Build project directories
         if (!std::filesystem::exists(absolutePath)) {
             std::filesystem::create_directories(absolutePath);
+        }
+
+        auto assetsPath = absolutePath / "Assets";
+        if (!std::filesystem::exists(assetsPath)) {
+            std::filesystem::create_directories(assetsPath);
         }
 
         std::filesystem::copy(Fate::PathUtils::getEnginePath() / "resources/ProjectTemplates/Default", absolutePath, std::filesystem::copy_options::recursive);
