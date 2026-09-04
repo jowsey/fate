@@ -1,6 +1,7 @@
 #pragma once
 #include <array>
 #include <memory>
+#include <cstdint>
 
 namespace Fate {
     struct CubemapData {
