@@ -4,7 +4,7 @@
     <h1>the Fate game engine</h1>
 </div>
 
-A modern, cross-platform Vulkan renderer & soon-to-be game engine.
+A modern, cross-platform game engine with a Vulkan renderer.
 
 # Usage
 
@@ -19,5 +19,5 @@ fate-editor open my-project # open your new project!
 
 Expects a copy of the Vulkan SDK (1.3+) in the environment at `VULKAN_SDK`.
 
-Build with CMake (>3.28, 4.3 ideal) and your choice of toolchain across Windows, Linux, or MacOS. I attempt to maintain consistent sane
+Build with CMake (>=3.28, 4.4 ideal) and your choice of toolchain across Windows, Linux, or Mac. I attempt to maintain consistent sane
 defaults, so everything *should* just work for you.
