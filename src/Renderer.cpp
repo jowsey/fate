@@ -496,6 +496,7 @@ namespace Fate {
 
         ImGuiStyle& style = ImGui::GetStyle();
         style.FontSizeBase = 16.0f;
+        style.WindowMenuButtonPosition = ImGuiDir_None;
 
         style.WindowRounding = 4.0f;
         style.PopupRounding = 4.0f;
