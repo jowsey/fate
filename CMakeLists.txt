@@ -8,18 +8,6 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 include(FetchContent)
 
-# Vulkan SDK
-if (NOT DEFINED ENV{VULKAN_SDK})
-    message(FATAL_ERROR "VULKAN_SDK environment variable not set")
-else ()
-    message("Found Vulkan SDK at $ENV{VULKAN_SDK}")
-endif ()
-
-find_package(Vulkan REQUIRED)
-include_directories(SYSTEM "$ENV{VULKAN_SDK}/include")
-
-find_program(SLANGC_EXE slangc HINTS "$ENV{VULKAN_SDK}/bin" REQUIRED)
-
 add_executable(fate
         src/utils/Paths.cpp
         src/utils/Paths.h
@@ -72,7 +60,7 @@ if (WIN32)
 endif ()
 
 # Static linking
-set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+set(BUILD_SHARED_LIBS OFF)
 if (WIN32)
     target_link_options(fate PRIVATE "-static")
 endif ()
@@ -93,12 +81,6 @@ if (CMAKE_BUILD_TYPE STREQUAL "Release")
         target_compile_options(fate PRIVATE -ffunction-sections -fdata-sections)
         target_link_options(fate PRIVATE -Wl,--gc-sections)
     endif ()
-
-    # glm SIMD support
-    #    target_compile_definitions(fate PRIVATE
-    #            GLM_FORCE_INTRINSICS
-    #            GLM_FORCE_DEFAULT_ALIGNED_GENTYPES
-    #    )
 
     # link-time optimization
     include(CheckIPOSupported)
@@ -121,6 +103,18 @@ add_custom_target(copy_resources
         COMMENT "Copying resources to build directory"
 )
 
+# Vulkan SDK
+if (NOT DEFINED ENV{VULKAN_SDK})
+    message(FATAL_ERROR "VULKAN_SDK environment variable not set")
+else ()
+    message("Found Vulkan SDK at $ENV{VULKAN_SDK}")
+endif ()
+
+find_package(Vulkan REQUIRED)
+#include_directories(SYSTEM "$ENV{VULKAN_SDK}/include")
+
+find_program(SLANGC_EXE slangc HINTS "$ENV{VULKAN_SDK}/bin" REQUIRED)
+
 # Compile shaders
 # todo it's kinda yucky that we depend on it being non-recursive to move stuff that doesn't export symbols to lib/
 #      find a way to make it recursive but not complain about libs not exporting symbols
@@ -136,7 +130,7 @@ foreach (SHADER_FILE IN LISTS SHADER_FILES)
             OUTPUT "${SPIRV_OUTPUT}"
             COMMAND ${CMAKE_COMMAND} -E make_directory "${SHADERS_DIR}"
             COMMAND ${SLANGC_EXE} "${SHADER_FILE}" -target spirv -o "${SPIRV_OUTPUT}"
-            DEPENDS "${SHADER_FILE}" "${RESOURCE_TIMESTAMP}"
+            DEPENDS "${SHADER_FILE}"
             COMMENT "Compiling shader ${SHADER_NAME} to SPIR-V"
     )
     list(APPEND SPIRV_OUTPUTS "${SPIRV_OUTPUT}")
@@ -153,6 +147,7 @@ FetchContent_Declare(
         GIT_REPOSITORY https://github.com/zeux/volk.git
         GIT_TAG 1.4.350
         GIT_SHALLOW TRUE
+        SYSTEM
 )
 
 target_compile_definitions(fate PRIVATE VK_NO_PROTOTYPES)
@@ -180,9 +175,9 @@ target_link_libraries(fate PRIVATE GPUOpen::VulkanMemoryAllocator)
 #        GIT_SHALLOW TRUE
 #)
 #
-#set(KTX_FEATURE_TOOLS OFF CACHE BOOL "" FORCE)
-#set(KTX_FEATURE_TESTS OFF CACHE BOOL "" FORCE)
-#set(KTX_FEATURE_APPS OFF CACHE BOOL "" FORCE)
+#set(KTX_FEATURE_TOOLS OFF)
+#set(KTX_FEATURE_TESTS OFF)
+#set(KTX_FEATURE_APPS OFF)
 #
 #FetchContent_MakeAvailable(ktx)
 #target_link_libraries(fate PRIVATE ktx)
@@ -195,19 +190,19 @@ FetchContent_Declare(
         GIT_SHALLOW TRUE
 )
 
-set(SDL_AUDIO OFF CACHE BOOL "" FORCE)
-set(SDL_GPU OFF CACHE BOOL "" FORCE)
-set(SDL_RENDER OFF CACHE BOOL "" FORCE)
-set(SDL_CAMERA OFF CACHE BOOL "" FORCE)
-set(SDL_JOYSTICK OFF CACHE BOOL "" FORCE)
-set(SDL_HAPTIC OFF CACHE BOOL "" FORCE)
-set(SDL_HIDAPI OFF CACHE BOOL "" FORCE)
-set(SDL_POWER OFF CACHE BOOL "" FORCE)
-set(SDL_SENSOR OFF CACHE BOOL "" FORCE)
-set(SDL_DIALOG OFF CACHE BOOL "" FORCE)
-set(SDL_TRAY OFF CACHE BOOL "" FORCE)
+set(SDL_AUDIO OFF)
+set(SDL_GPU OFF)
+set(SDL_RENDER OFF)
+set(SDL_CAMERA OFF)
+set(SDL_JOYSTICK OFF)
+set(SDL_HAPTIC OFF)
+set(SDL_HIDAPI OFF)
+set(SDL_POWER OFF)
+set(SDL_SENSOR OFF)
+set(SDL_DIALOG OFF)
+set(SDL_TRAY OFF)
 
-set(SDL_TEST_LIBRARY OFF CACHE BOOL "" FORCE)
+set(SDL_TEST_LIBRARY OFF)
 
 FetchContent_MakeAvailable(sdl3)
 target_link_libraries(fate PRIVATE SDL3::SDL3)
@@ -218,6 +213,7 @@ FetchContent_Declare(
         GIT_REPOSITORY https://github.com/g-truc/glm.git
         GIT_TAG 1.0.3
         GIT_SHALLOW TRUE
+        SYSTEM
 )
 
 target_compile_definitions(fate PRIVATE GLM_FORCE_DEPTH_ZERO_TO_ONE)
@@ -246,7 +242,7 @@ set(IMGUI_SOURCES
 )
 
 add_library(imgui STATIC ${IMGUI_SOURCES})
-target_include_directories(imgui PUBLIC
+target_include_directories(imgui SYSTEM PUBLIC
         ${imgui_SOURCE_DIR}
         ${imgui_SOURCE_DIR}/backends
 )
@@ -265,28 +261,29 @@ FetchContent_Declare(
         GIT_REPOSITORY https://github.com/assimp/assimp.git
         GIT_TAG v6.0.5
         GIT_SHALLOW TRUE
+        SYSTEM
 )
 
-set(ASSIMP_BUILD_ALL_IMPORTERS_BY_DEFAULT OFF CACHE BOOL "" FORCE)
-set(ASSIMP_BUILD_ALL_EXPORTERS_BY_DEFAULT OFF CACHE BOOL "" FORCE)
+set(ASSIMP_BUILD_ALL_IMPORTERS_BY_DEFAULT OFF)
+set(ASSIMP_BUILD_ALL_EXPORTERS_BY_DEFAULT OFF)
 
-set(ASSIMP_BUILD_GLTF_IMPORTER ON CACHE BOOL "" FORCE)
+set(ASSIMP_BUILD_GLTF_IMPORTER ON)
 
-set(ASSIMP_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-set(ASSIMP_BUILD_ASSIMP_TOOLS OFF CACHE BOOL "" FORCE)
-set(ASSIMP_INSTALL OFF CACHE BOOL "" FORCE)
-set(ASSIMP_WARNINGS_AS_ERRORS OFF CACHE BOOL "" FORCE)
+set(ASSIMP_BUILD_TESTS OFF)
+set(ASSIMP_BUILD_ASSIMP_TOOLS OFF)
+set(ASSIMP_INSTALL OFF)
+set(ASSIMP_WARNINGS_AS_ERRORS OFF)
 if (APPLE)
-    set(ASSIMP_BUILD_ZLIB OFF CACHE BOOL "" FORCE)
+    set(ASSIMP_BUILD_ZLIB OFF)
 else ()
-    set(ASSIMP_BUILD_ZLIB ON CACHE BOOL "" FORCE)
+    set(ASSIMP_BUILD_ZLIB ON)
 endif ()
 
 # mitigate stricter transitive includes on llvm 23, remove once assimp updates
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -include ostream")
 
 FetchContent_MakeAvailable(assimp)
-target_link_libraries(fate PRIVATE assimp)
+target_link_libraries(fate PRIVATE assimp::assimp)
 
 # wuffs
 FetchContent_Declare(
@@ -298,7 +295,7 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(wuffs)
 add_library(wuffs INTERFACE)
-target_include_directories(wuffs INTERFACE ${wuffs_SOURCE_DIR}/release/c)
+target_include_directories(wuffs SYSTEM INTERFACE ${wuffs_SOURCE_DIR}/release/c)
 target_link_libraries(fate PRIVATE wuffs)
 
 # spdlog
@@ -331,6 +328,7 @@ FetchContent_Declare(
         GIT_REPOSITORY https://github.com/CLIUtils/CLI11.git
         GIT_TAG v2.7.2
         GIT_SHALLOW TRUE
+        SYSTEM
 )
 
 FetchContent_MakeAvailable(CLI11)
