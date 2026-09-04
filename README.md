@@ -2,9 +2,10 @@
     <img src=".github/fate-banner-logo.webp" width="512" alt="the fate logo" />
     <br/>
     <h1>the Fate game engine</h1>
+    <p>A modern, cross-platform game engine with a Vulkan renderer.</p>
+    <br/>
+    <img src=".github/editor-screenshot.webp" width="768" alt="a screenshot of the fate editor rendering a scene showing the GLTF Sample Asset 'Damaged Helmet' before a modern-style skybox of Canary Wharf."/>
 </div>
-
-A modern, cross-platform game engine with a Vulkan renderer.
 
 # Usage
 
