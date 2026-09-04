@@ -186,8 +186,9 @@ target_link_libraries(fate PRIVATE GPUOpen::VulkanMemoryAllocator)
 FetchContent_Declare(
         sdl3
         GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
-        GIT_TAG release-3.4.14
+        GIT_TAG release-3.4.16
         GIT_SHALLOW TRUE
+        SYSTEM
 )
 
 set(SDL_AUDIO OFF)
