@@ -1,0 +1,153 @@
+name: build
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch: { }
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  SCCACHE_GHA_ENABLED: "true"
+  GH_TOKEN: ${{ github.token }}
+  LLVM_VERSION: "23"
+  GCC_VERSION: "16"
+  MSVC_TOOLSET: "14.51" # vs 2026, cl 19.51
+  LLVM_MINGW_TAG: "20260826" # https://github.com/mstorsjo/llvm-mingw/releases
+  MINGW_GCC_TAG: "16.2.0-rt_v14-rev1" # https://github.com/niXman/mingw-builds-binaries/releases
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: windows-msvc, os: windows-2025, toolchain: msvc }
+          - { name: windows-llvm, os: windows-2025, toolchain: llvm-mingw }
+          - { name: windows-gcc,  os: windows-2025, toolchain: gcc-mingw }
+          - { name: macos-llvm,   os: macos-15,     toolchain: llvm }
+          - { name: linux-gcc,    os: ubuntu-24.04, toolchain: gcc }
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: mozilla-actions/sccache-action@v0.0.11
+
+      - name: Install Vulkan SDK
+        uses: jakoch/install-vulkan-sdk-action@v1
+        with:
+          cache: true
+
+      # toolchains
+
+      - name: Install llvm-mingw (Windows)
+        if: matrix.toolchain == 'llvm-mingw'
+        run: |
+          gh release download "$LLVM_MINGW_TAG" -R mstorsjo/llvm-mingw \
+            -p '*ucrt-x86_64.zip' -D "$RUNNER_TEMP"
+          7z x -oC:/ "$RUNNER_TEMP"/*.zip >/dev/null
+          dir="$(echo C:/llvm-mingw-*-ucrt-x86_64)"
+          echo "$dir/bin" >> "$GITHUB_PATH"
+          echo "CC=$dir/bin/clang.exe"    >> "$GITHUB_ENV"
+          echo "CXX=$dir/bin/clang++.exe" >> "$GITHUB_ENV"
+
+      - name: Install GCC mingw-w64 (Windows)
+        if: matrix.toolchain == 'gcc-mingw'
+        run: |
+          gh release download "$MINGW_GCC_TAG" -R niXman/mingw-builds-binaries \
+            -p 'x86_64-*-release-posix-seh-ucrt-*.7z' -D "$RUNNER_TEMP"
+          7z x -oC:/gcc-mingw "$RUNNER_TEMP"/*.7z >/dev/null
+          echo "C:/gcc-mingw/mingw64/bin" >> "$GITHUB_PATH"
+          echo "CC=C:/gcc-mingw/mingw64/bin/gcc.exe"  >> "$GITHUB_ENV"
+          echo "CXX=C:/gcc-mingw/mingw64/bin/g++.exe" >> "$GITHUB_ENV"
+
+      - name: Install upstream LLVM (macOS)
+        if: matrix.toolchain == 'llvm'
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: "1"
+          HOMEBREW_NO_INSTALL_CLEANUP: "1"
+        run: |
+          brew install "llvm@${LLVM_VERSION}" ninja
+          prefix="$(brew --prefix "llvm@${LLVM_VERSION}")"
+          echo "$prefix/bin" >> "$GITHUB_PATH"
+          echo "CC=$prefix/bin/clang"    >> "$GITHUB_ENV"
+          echo "CXX=$prefix/bin/clang++" >> "$GITHUB_ENV"
+
+      - name: Install GCC + deps (Linux)
+        if: matrix.toolchain == 'gcc'
+        run: |
+          sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
+          sudo apt-get install -y --no-install-recommends \
+            ninja-build "gcc-${GCC_VERSION}" "g++-${GCC_VERSION}" \
+            libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev \
+            libxss-dev libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev wayland-protocols \
+            libegl-dev libgl-dev libdbus-1-dev
+          echo "CC=gcc-${GCC_VERSION}" >> "$GITHUB_ENV"
+          echo "CXX=g++-${GCC_VERSION}" >> "$GITHUB_ENV"
+
+      # configure & build
+
+      - name: Configure (Visual Studio)
+        if: matrix.toolchain == 'msvc'
+        # VS generator ignores CMAKE_<LANG>_COMPILER_LAUNCHER
+        # documented sccache MSBuild hook - UseMultiToolTask gives us parallel cl.exe
+        run: >-
+          cmake -S . -B build -G "Visual Studio 18 2026" -A x64 -T "version=${MSVC_TOOLSET}"
+          -DCMAKE_VS_GLOBALS="CLToolExe=sccache.exe;CLToolPath=${SCCACHE_PATH%[\\/]*};TrackFileAccess=false;UseMultiToolTask=true"
+
+      - name: Configure (Ninja)
+        if: matrix.toolchain != 'msvc'
+        run: >-
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          -DCMAKE_C_COMPILER_LAUNCHER=sccache
+          -DCMAKE_CXX_COMPILER_LAUNCHER=sccache
+
+      - name: Verify pinned compiler
+        run: |
+          case '${{ matrix.toolchain }}' in
+            msvc)   want="19.${MSVC_TOOLSET#14.}" ;;
+            *llvm*) want="${LLVM_VERSION}." ;;
+            *gcc*)  want="${GCC_VERSION}." ;;
+          esac
+          have="$(sed -n 's/^set(CMAKE_CXX_COMPILER_VERSION "\(.*\)")/\1/p' build/CMakeFiles/*/CMakeCXXCompiler.cmake)"
+          echo "CXX compiler: $have (want ${want}*)"
+          [[ "$have" == "$want"* ]]
+
+      - name: Build
+        run: cmake --build build --config Release --parallel
+
+      # package
+
+      - name: Package
+        run: |
+          version="$(sed -n 's/^CMAKE_PROJECT_VERSION:STATIC=//p' build/CMakeCache.txt)"
+          [[ -n "$version" ]] || { echo "::error::project() has no VERSION"; exit 1; }
+          arch="$(echo '${{ runner.arch }}' | tr '[:upper:]' '[:lower:]')"
+          name="fate-${{ matrix.name }}-v${version}-${arch}"
+          cmake -E copy_directory build/dist "stage/$name"
+          (cd stage && cmake -E tar cf "../$name.zip" --format=zip -- "$name")
+          echo "ARCHIVE=$name" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ env.ARCHIVE }}
+          path: ${{ env.ARCHIVE }}.zip
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 7
+
+      - name: Show sccache stats
+        if: always()
+        run: sccache --show-stats
