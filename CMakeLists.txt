@@ -144,9 +144,7 @@ add_dependencies(fate compile_shaders)
 # Volk
 FetchContent_Declare(
         volk
-        GIT_REPOSITORY https://github.com/zeux/volk.git
-        GIT_TAG 1.4.350
-        GIT_SHALLOW TRUE
+        URL https://github.com/zeux/volk/archive/refs/tags/1.4.350.tar.gz
         SYSTEM
 )
 
@@ -158,9 +156,7 @@ target_link_libraries(fate PRIVATE volk)
 # VMA
 FetchContent_Declare(
         vma
-        GIT_REPOSITORY https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git
-        GIT_TAG v3.4.0
-        GIT_SHALLOW TRUE
+        URL https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator/archive/refs/tags/v3.4.0.tar.gz
         SYSTEM
 )
 
@@ -185,9 +181,7 @@ target_link_libraries(fate PRIVATE GPUOpen::VulkanMemoryAllocator)
 # SDL3
 FetchContent_Declare(
         sdl3
-        GIT_REPOSITORY https://github.com/libsdl-org/SDL.git
-        GIT_TAG release-3.4.16
-        GIT_SHALLOW TRUE
+        URL https://github.com/libsdl-org/SDL/releases/download/release-3.4.16/SDL3-3.4.16.tar.gz
         SYSTEM
 )
 
@@ -211,9 +205,7 @@ target_link_libraries(fate PRIVATE SDL3::SDL3)
 # GLM
 FetchContent_Declare(
         glm
-        GIT_REPOSITORY https://github.com/g-truc/glm.git
-        GIT_TAG 1.0.3
-        GIT_SHALLOW TRUE
+        URL https://github.com/g-truc/glm/archive/refs/tags/1.0.3.tar.gz
         SYSTEM
 )
 
@@ -225,9 +217,7 @@ target_link_libraries(fate PRIVATE glm::glm)
 # ImGui
 FetchContent_Declare(
         imgui
-        GIT_REPOSITORY https://github.com/ocornut/imgui.git
-        GIT_TAG v1.92.9b-docking
-        GIT_SHALLOW TRUE
+        URL https://github.com/ocornut/imgui/archive/refs/tags/v1.92.9b-docking.tar.gz
 )
 
 FetchContent_MakeAvailable(imgui)
@@ -259,9 +249,7 @@ target_link_libraries(fate PRIVATE imgui)
 # assimp
 FetchContent_Declare(
         assimp
-        GIT_REPOSITORY https://github.com/assimp/assimp.git
-        GIT_TAG v6.0.5
-        GIT_SHALLOW TRUE
+        URL https://github.com/assimp/assimp/archive/refs/tags/v6.0.5.tar.gz
         SYSTEM
 )
 
@@ -289,22 +277,20 @@ target_link_libraries(fate PRIVATE assimp::assimp)
 # wuffs
 FetchContent_Declare(
         wuffs
-        GIT_REPOSITORY https://github.com/google/wuffs.git
-        GIT_TAG v0.4.0-alpha.10
-        GIT_SHALLOW TRUE
+        URL https://raw.githubusercontent.com/google/wuffs/v0.4.0-alpha.10/release/c/wuffs-v0.4.c
+        DOWNLOAD_NO_EXTRACT TRUE
+        DOWNLOAD_NAME wuffs-v0.4.c
 )
 
 FetchContent_MakeAvailable(wuffs)
 add_library(wuffs INTERFACE)
-target_include_directories(wuffs SYSTEM INTERFACE ${wuffs_SOURCE_DIR}/release/c)
+target_include_directories(wuffs SYSTEM INTERFACE ${wuffs_SOURCE_DIR})
 target_link_libraries(fate PRIVATE wuffs)
 
 # spdlog
 FetchContent_Declare(
         spdlog
-        GIT_REPOSITORY https://github.com/gabime/spdlog.git
-        GIT_TAG v1.17.0
-        GIT_SHALLOW TRUE
+        URL https://github.com/gabime/spdlog/archive/refs/tags/v1.17.0.tar.gz
         SYSTEM
 )
 
@@ -314,9 +300,7 @@ target_link_libraries(fate PRIVATE spdlog::spdlog)
 # glaze
 FetchContent_Declare(
         glaze
-        GIT_REPOSITORY https://github.com/stephenberry/glaze.git
-        GIT_TAG v8.3.0
-        GIT_SHALLOW TRUE
+        URL https://github.com/stephenberry/glaze/archive/refs/tags/v8.3.0.tar.gz
         SYSTEM
 )
 
@@ -326,9 +310,7 @@ target_link_libraries(fate PRIVATE glaze::glaze)
 # CLI11
 FetchContent_Declare(
         CLI11
-        GIT_REPOSITORY https://github.com/CLIUtils/CLI11.git
-        GIT_TAG v2.7.2
-        GIT_SHALLOW TRUE
+        URL https://github.com/CLIUtils/CLI11/releases/download/v2.7.2/CLI11-2.7.2-Source.tar.gz
         SYSTEM
 )
 
