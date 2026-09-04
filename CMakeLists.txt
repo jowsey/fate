@@ -36,16 +36,6 @@ else ()
     add_link_options("$<$<CONFIG:Release>:-Wl,--gc-sections>")
 endif ()
 
-# link-time optimization
-include(CheckIPOSupported)
-check_ipo_supported(RESULT ipoSupported OUTPUT error)
-if (ipoSupported)
-    message(STATUS "LTO available!")
-    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
-else ()
-    message(STATUS "LTO unavailable: ${error}")
-endif ()
-
 # Static linking
 set(BUILD_SHARED_LIBS OFF)
 
@@ -84,6 +74,16 @@ add_executable(fate
         src/IndexAllocator.h
         src/CubemapData.h
 )
+
+# link-time optimization
+include(CheckIPOSupported)
+check_ipo_supported(RESULT ipoSupported OUTPUT error)
+if (ipoSupported)
+    message(STATUS "LTO available!")
+    set_target_properties(fate PROPERTIES INTERPROCEDURAL_OPTIMIZATION_RELEASE TRUE)
+else ()
+    message(STATUS "LTO unavailable: ${error}")
+endif ()
 
 target_compile_definitions(fate PRIVATE
         FATE_VERSION="${fate_VERSION}"
