@@ -104,16 +104,8 @@ add_custom_target(copy_resources
 )
 
 # Vulkan SDK
-if (NOT DEFINED ENV{VULKAN_SDK})
-    message(FATAL_ERROR "VULKAN_SDK environment variable not set")
-else ()
-    message("Found Vulkan SDK at $ENV{VULKAN_SDK}")
-endif ()
-
 find_package(Vulkan REQUIRED)
-#include_directories(SYSTEM "$ENV{VULKAN_SDK}/include")
-
-find_program(SLANGC_EXE slangc HINTS "$ENV{VULKAN_SDK}/bin" REQUIRED)
+find_program(SLANGC_EXE slangc HINTS ENV VULKAN_SDK PATH_SUFFIXES bin REQUIRED)
 
 # Compile shaders
 # todo it's kinda yucky that we depend on it being non-recursive to move stuff that doesn't export symbols to lib/
