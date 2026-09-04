@@ -8,8 +8,6 @@
 #include <vector>
 
 #include "spdlog/spdlog.h"
-
-#define WUFFS_IMPLEMENTATION
 #include "wuffs-v0.4.c"
 
 namespace Fate::FileUtils {

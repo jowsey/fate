@@ -126,7 +126,7 @@ namespace Fate {
         vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, nullptr);
         std::vector<VkQueueFamilyProperties> queueFamilies(queueFamilyCount);
         vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, queueFamilies.data());
-        for (std::size_t i = 0; i < queueFamilies.size(); i++) {
+        for (std::uint32_t i = 0; i < queueFamilies.size(); i++) {
             if (queueFamilies[i].queueFlags & VK_QUEUE_GRAPHICS_BIT) {
                 queueFamilyIndex = i;
                 break;
@@ -963,7 +963,12 @@ namespace Fate {
         std::memcpy(static_cast<char*>(vertexBufferAllocationInfo.pMappedData) + vertexOffset, mesh.getVertices().data(), vertexBytes);
         std::memcpy(static_cast<char*>(indexBufferAllocationInfo.pMappedData) + indexOffset, mesh.getIndices().data(), indexBytes);
 
-        return GPUMeshHandle(vertexOffset / sizeof(Vertex), indexOffset / sizeof(std::uint32_t), vertexVirtualAllocation, indexVirtualAllocation);
+        return GPUMeshHandle(
+            static_cast<std::uint32_t>(vertexOffset) / sizeof(Vertex),
+            static_cast<std::uint32_t>(indexOffset) / sizeof(std::uint32_t),
+            vertexVirtualAllocation,
+            indexVirtualAllocation
+        );
     }
 
     AllocatedTexture* Renderer::uploadTexture(const TextureData& texture) {

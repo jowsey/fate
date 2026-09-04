@@ -1,12 +1,59 @@
 cmake_minimum_required(VERSION 3.28...4.4)
 project(fate VERSION 0.1.0)
 
-set(CMAKE_CXX_STANDARD 26)
+set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 include(FetchContent)
+
+# Release build optimizations
+# avx2
+if (CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
+    if (MSVC)
+        add_compile_options("$<$<CONFIG:Release>:/arch:AVX2>")
+    else ()
+        add_compile_options("$<$<CONFIG:Release>:-march=x86-64-v3>")
+    endif ()
+endif ()
+
+# fast math
+if (MSVC)
+    add_compile_options("$<$<CONFIG:Release>:/fp:contract>")
+else ()
+    add_compile_options("$<$<CONFIG:Release>:-ffp-contract=fast;-fno-math-errno>")
+endif ()
+
+# dead code elimination
+if (MSVC)
+    add_compile_options("$<$<CONFIG:Release>:/Gy>")
+    add_link_options("$<$<CONFIG:Release>:/OPT:REF>")
+elseif (APPLE)
+    add_link_options("$<$<CONFIG:Release>:-Wl,-dead_strip>")
+else ()
+    add_compile_options("$<$<CONFIG:Release>:-ffunction-sections;-fdata-sections>")
+    add_link_options("$<$<CONFIG:Release>:-Wl,--gc-sections>")
+endif ()
+
+# link-time optimization
+include(CheckIPOSupported)
+check_ipo_supported(RESULT ipoSupported OUTPUT error)
+if (ipoSupported)
+    message(STATUS "LTO available!")
+    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
+else ()
+    message(STATUS "LTO unavailable: ${error}")
+endif ()
+
+# Static linking
+set(BUILD_SHARED_LIBS OFF)
+
+if (MSVC)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+elseif (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang" AND NOT APPLE)
+    set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static")
+endif ()
 
 add_executable(fate
         src/utils/Paths.cpp
@@ -49,51 +96,20 @@ target_compile_definitions(fate PRIVATE
 set_target_properties(fate PROPERTIES COMPILE_WARNING_AS_ERROR ON)
 
 # -Wmissing-designated-field-initializers very annoying for Vulkan structs
-target_compile_options(fate PRIVATE
-        $<$<CXX_COMPILER_ID:MSVC>:/W4>
-        $<$<OR:$<CXX_COMPILER_ID:GNU>,$<CXX_COMPILER_ID:Clang>>:-Wall -Wextra -pedantic -Wno-missing-field-initializers>
-)
+if (MSVC)
+    target_compile_options(fate PRIVATE /W4)
+else ()
+    target_compile_options(fate PRIVATE -Wall -Wextra -pedantic -Wno-missing-field-initializers)
+endif ()
 
 # Windows app icon
 if (WIN32)
     target_sources(fate PRIVATE "resources-build/app_icon.rc")
 endif ()
 
-# Static linking
-set(BUILD_SHARED_LIBS OFF)
-if (WIN32)
-    target_link_options(fate PRIVATE "-static")
-endif ()
-
-# Release build optimizations
-if (CMAKE_BUILD_TYPE STREQUAL "Release")
-    # avx2
-    if (CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
-        target_compile_options(fate PRIVATE -march=x86-64-v3)
-    endif ()
-
-    target_compile_options(fate PRIVATE -ffp-contract=fast -fno-math-errno)
-
-    # dead code elimination
-    if (APPLE)
-        target_link_options(fate PRIVATE -Wl,-dead_strip)
-    else ()
-        target_compile_options(fate PRIVATE -ffunction-sections -fdata-sections)
-        target_link_options(fate PRIVATE -Wl,--gc-sections)
-    endif ()
-
-    # link-time optimization
-    include(CheckIPOSupported)
-    check_ipo_supported(RESULT ipoSupported OUTPUT error)
-    if (ipoSupported)
-        message(STATUS "LTO enabled")
-        set_target_properties(fate PROPERTIES INTERPROCEDURAL_OPTIMIZATION TRUE)
-    endif ()
-endif ()
-
 # Build directory
 set_target_properties(fate PROPERTIES
-        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/dist/bin"
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/dist/bin$<1:>"
         OUTPUT_NAME "fate-editor"
 )
 
@@ -254,16 +270,14 @@ set(ASSIMP_BUILD_TESTS OFF)
 set(ASSIMP_BUILD_ASSIMP_TOOLS OFF)
 set(ASSIMP_INSTALL OFF)
 set(ASSIMP_WARNINGS_AS_ERRORS OFF)
-if (APPLE)
-    set(ASSIMP_BUILD_ZLIB OFF)
-else ()
-    set(ASSIMP_BUILD_ZLIB ON)
-endif ()
-
-# mitigate stricter transitive includes on llvm 23, remove once assimp updates
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -include ostream")
 
 FetchContent_MakeAvailable(assimp)
+
+# mitigate stricter transitive includes on llvm 23, remove once assimp updates
+target_compile_options(assimp PRIVATE
+        $<$<AND:$<COMPILE_LANGUAGE:CXX>,$<CXX_COMPILER_ID:Clang>>:-include ostream>
+)
+
 target_link_libraries(fate PRIVATE assimp::assimp)
 
 # wuffs
@@ -275,8 +289,18 @@ FetchContent_Declare(
 )
 
 FetchContent_MakeAvailable(wuffs)
-add_library(wuffs INTERFACE)
-target_include_directories(wuffs SYSTEM INTERFACE ${wuffs_SOURCE_DIR})
+set_source_files_properties(${wuffs_SOURCE_DIR}/wuffs-v0.4.c PROPERTIES LANGUAGE CXX)
+
+add_library(wuffs STATIC ${wuffs_SOURCE_DIR}/wuffs-v0.4.c)
+target_compile_definitions(wuffs PRIVATE WUFFS_IMPLEMENTATION)
+
+if (MSVC)
+    target_compile_options(wuffs PRIVATE /W0)
+else ()
+    target_compile_options(wuffs PRIVATE -w)
+endif ()
+
+target_include_directories(wuffs PUBLIC ${wuffs_SOURCE_DIR})
 target_link_libraries(fate PRIVATE wuffs)
 
 # spdlog
