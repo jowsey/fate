@@ -219,7 +219,7 @@ namespace Fate {
         vkChk(vkGetSwapchainImagesKHR(device, swapchain, &swapchainImageCount, swapchainImages.data()));
         swapchainImageViews.resize(swapchainImageCount);
 
-        for (auto i = 0; i < swapchainImageCount; i++) {
+        for (std::uint32_t i = 0; i < swapchainImageCount; i++) {
             VkImageViewCreateInfo viewCI{
                 .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
                 .image = swapchainImages[i],
@@ -288,7 +288,7 @@ namespace Fate {
 
         // Shader data buffers
         // todo abstract this to helper
-        for (auto i = 0; i < MaxFramesInFlight; i++) {
+        for (std::uint32_t i = 0; i < MaxFramesInFlight; i++) {
             VmaAllocationCreateInfo bufferAllocCI{.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT | VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT | VMA_ALLOCATION_CREATE_MAPPED_BIT, .usage = VMA_MEMORY_USAGE_AUTO};
 
             // Skybox globals
@@ -319,7 +319,7 @@ namespace Fate {
         // Sync objects
         VkSemaphoreCreateInfo semaphoreCI{.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
         VkFenceCreateInfo fenceCI{.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO, .flags = VK_FENCE_CREATE_SIGNALED_BIT};
-        for (auto i = 0; i < MaxFramesInFlight; i++) {
+        for (std::uint32_t i = 0; i < MaxFramesInFlight; i++) {
             vkChk(vkCreateFence(device, &fenceCI, nullptr, &fences[i]));
             vkChk(vkCreateSemaphore(device, &semaphoreCI, nullptr, &imageAcquiredSemaphores[i]));
         }
@@ -561,7 +561,7 @@ namespace Fate {
         spdlog::info("Renderer shutting down");
 
         vkChk(vkDeviceWaitIdle(device));
-        for (auto i = 0; i < MaxFramesInFlight; i++) {
+        for (std::uint32_t i = 0; i < MaxFramesInFlight; i++) {
             vkDestroyFence(device, fences[i], nullptr);
             vkDestroySemaphore(device, imageAcquiredSemaphores[i], nullptr);
             vmaDestroyBuffer(allocator, skyboxGlobalsBuffers[i].buffer, skyboxGlobalsBuffers[i].allocation);
@@ -885,8 +885,8 @@ namespace Fate {
             };
 
             vkChk(vkCreateSwapchainKHR(device, &swapchainCI, nullptr, &swapchain));
-            for (auto i = 0; i < swapchainImageViews.size(); i++) {
-                vkDestroyImageView(device, swapchainImageViews[i], nullptr);
+            for (auto& swapchainImageView: swapchainImageViews) {
+                vkDestroyImageView(device, swapchainImageView, nullptr);
             }
 
             std::uint32_t swapchainImageCount{0};
@@ -895,7 +895,7 @@ namespace Fate {
             vkChk(vkGetSwapchainImagesKHR(device, swapchain, &swapchainImageCount, swapchainImages.data()));
             swapchainImageViews.resize(swapchainImageCount);
 
-            for (auto i = 0; i < swapchainImageCount; i++) {
+            for (std::uint32_t i = 0; i < swapchainImageCount; i++) {
                 VkImageViewCreateInfo viewCI{
                     .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
                     .image = swapchainImages[i],

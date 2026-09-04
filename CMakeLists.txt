@@ -2,7 +2,9 @@ cmake_minimum_required(VERSION 3.28...4.4)
 project(fate VERSION 0.1.0)
 
 set(CMAKE_CXX_STANDARD 26)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
+set(CMAKE_CXX_EXTENSIONS OFF)
 
 include(FetchContent)
 
@@ -53,6 +55,15 @@ target_compile_definitions(fate PRIVATE
         FATE_VERSION_MAJOR=${fate_VERSION_MAJOR}
         FATE_VERSION_MINOR=${fate_VERSION_MINOR}
         FATE_VERSION_PATCH=${fate_VERSION_PATCH}
+)
+
+# Strict warnings
+set_target_properties(fate PROPERTIES COMPILE_WARNING_AS_ERROR ON)
+
+# -Wmissing-designated-field-initializers very annoying for Vulkan structs
+target_compile_options(fate PRIVATE
+        $<$<CXX_COMPILER_ID:MSVC>:/W4>
+        $<$<OR:$<CXX_COMPILER_ID:GNU>,$<CXX_COMPILER_ID:Clang>>:-Wall -Wextra -pedantic -Wno-missing-field-initializers>
 )
 
 # Windows app icon
