@@ -16,9 +16,11 @@ namespace Fate {
 
         if (std::filesystem::is_directory(projectPath)) {
             filePath = projectPath / ".fateproject";
-        } else if (projectPath.filename() == ".fateproject") {
+        }
+        else if (projectPath.filename() == ".fateproject") {
             filePath = projectPath;
-        } else {
+        }
+        else {
             return std::unexpected("not a .fateproject file");
         }
 
@@ -44,7 +46,8 @@ namespace Fate {
 
         if (std::filesystem::is_directory(projectPath)) {
             projectDirectory = std::filesystem::absolute(projectPath);
-        } else {
+        }
+        else {
             projectDirectory = std::filesystem::absolute(projectPath.parent_path());
         }
 

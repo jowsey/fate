@@ -35,7 +35,8 @@ namespace {
                                  || c == '-' || c == '_' || c == '.' || c == '~' || c == '/' || c == ':';
             if (isValid) {
                 url += static_cast<char>(c);
-            } else {
+            }
+            else {
                 url += std::format("%{:02X}", static_cast<unsigned>(c));
             }
         }
@@ -48,13 +49,10 @@ namespace Fate {
         drawMainMenuBar(deltaTime);
 
         ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport(), ImGuiDockNodeFlags_PassthruCentralNode);
-
-        if (scene) {
-            hierarchyWindow.draw(*scene, selectedObject, renderer);
-            inspectorWindow.draw(selectedObject);
-        }
-
+        hierarchyWindow.draw(*scene, selectedObject, renderer);
+        inspectorWindow.draw(selectedObject);
         assetsWindow.draw();
+
         drawResourceUsageWindow(renderer);
     }
 
@@ -113,9 +111,7 @@ namespace Fate {
     }
 
     void EditorUI::drawResourceUsageWindow(const Renderer& renderer) {
-        if (!showResourceUsage) {
-            return;
-        }
+        if (!showResourceUsage) return;
 
         ImGui::Begin("Resource Usage", &showResourceUsage);
 
@@ -154,19 +150,6 @@ namespace Fate {
     void HierarchyWindow::draw(const Scene& scene, SceneObject*& selected, Renderer& renderer) {
         ImGui::Begin("Hierarchy");
 
-        drawSceneSettings(renderer);
-
-        ImGui::Separator();
-
-        for (SceneObject* object: scene.getObjects()) {
-            if (object->getTransform().getParent() != nullptr) continue;
-            drawNode(object->getTransform(), selected);
-        }
-
-        ImGui::End();
-    }
-
-    void HierarchyWindow::drawSceneSettings(Renderer& renderer) {
         ImGui::DragScalarN("Camera position", ImGuiDataType_Double, &renderer.getCameraPosition().x, 3, 0.01f);
         ImGui::DragFloat3("Camera rotation", &renderer.getCameraRotation().x, 0.1f);
         ImGui::DragFloat("Camera FOV", &renderer.getCameraHorFovDegs(), 0.1f);
@@ -174,6 +157,19 @@ namespace Fate {
         ImGui::DragFloat3("Light direction", &renderer.getLightDir().x, 0.01f);
         ImGui::ColorEdit3("Light colour", &renderer.getLightColor().x);
         ImGui::DragFloat("Light intensity", &renderer.getLightIntensity(), 0.01f);
+
+        ImGui::Spacing();
+        ImGui::Spacing();
+        ImGui::Separator();
+        ImGui::Spacing();
+        ImGui::Spacing();
+
+        for (SceneObject* object: scene.getObjects()) {
+            if (object->getTransform().getParent() != nullptr) continue;
+            drawNode(object->getTransform(), selected);
+        }
+
+        ImGui::End();
     }
 
     void HierarchyWindow::drawNode(const SceneTransform& transform, SceneObject*& selected) {
@@ -344,10 +340,12 @@ namespace Fate {
             if (ImGui::IsKeyPressed(ImGuiKey_DownArrow)) {
                 selectedIndex = std::min(selectedIndex + 1, lastIndex);
                 scrollToSelection = true;
-            } else if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) {
+            }
+            else if (ImGui::IsKeyPressed(ImGuiKey_UpArrow)) {
                 selectedIndex = selectedIndex < 0 ? lastIndex : std::max(selectedIndex - 1, 0);
                 scrollToSelection = true;
-            } else if (ImGui::IsKeyPressed(ImGuiKey_Enter) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter)) {
+            }
+            else if (ImGui::IsKeyPressed(ImGuiKey_Enter) || ImGui::IsKeyPressed(ImGuiKey_KeypadEnter)) {
                 if (selectedIndex >= 0) {
                     activate(selectedIndex);
                 }
@@ -413,7 +411,8 @@ namespace Fate {
             currentDir = entry.path;
             selectedIndex = -1;
             rescan();
-        } else {
+        }
+        else {
             openFile(entry.path);
         }
     }

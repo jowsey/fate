@@ -14,6 +14,7 @@ namespace Fate {
     class Engine {
         std::optional<Renderer> renderer;
         std::unique_ptr<Scene> activeScene;
+
         std::optional<AllocatedTexture*> tryUploadMaterialTexture(const std::filesystem::path& modelPath, const aiMaterial* nodeMaterial, const aiScene* scene, aiTextureType textureType, TextureColourSpace colourSpace);
 
         Mesh processNodeMesh(const std::filesystem::path& modelPath, const aiMesh* mesh, const aiScene* scene);

@@ -13,8 +13,6 @@ namespace Fate {
     class HierarchyWindow {
         void drawNode(const SceneTransform& transform, SceneObject*& selected);
 
-        void drawSceneSettings(Renderer& renderer);
-
     public:
         void draw(const Scene& scene, SceneObject*& selected, Renderer& renderer);
     };

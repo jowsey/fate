@@ -59,7 +59,8 @@ namespace Fate {
             if (event.type == SDL_EVENT_WINDOW_RESIZED) {
                 spdlog::debug("Window resized to {}x{}", event.window.data1, event.window.data2);
                 renderer->updateSwapchain = true;
-            } else if (event.type == SDL_EVENT_QUIT) {
+            }
+            else if (event.type == SDL_EVENT_QUIT) {
                 quitRequested = true;
             }
         }
