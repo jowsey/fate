@@ -17,7 +17,6 @@ env:
   GH_TOKEN: ${{ github.token }}
   LLVM_VERSION: "23"
   GCC_VERSION: "16"
-  MSVC_TOOLSET: "14.51" # vs 2026, cl 19.51
   LLVM_MINGW_TAG: "20260826" # https://github.com/mstorsjo/llvm-mingw/releases
   MINGW_GCC_TAG: "16.2.0-rt_v14-rev1" # https://github.com/niXman/mingw-builds-binaries/releases
 
@@ -30,10 +29,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - { name: windows-msvc, os: windows-2025, toolchain: msvc }
+          - { name: windows-msvc, os: windows-2025-vs2026, toolchain: msvc }
           - { name: windows-llvm, os: windows-2025, toolchain: llvm-mingw }
           - { name: windows-gcc,  os: windows-2025, toolchain: gcc-mingw }
-          - { name: macos-llvm,   os: macos-15,     toolchain: llvm }
+          - { name: macos-llvm,   os: macos-26,     toolchain: llvm }
           - { name: linux-gcc,    os: ubuntu-24.04, toolchain: gcc }
 
     defaults:
@@ -76,9 +75,9 @@ jobs:
       - name: Install upstream LLVM (macOS)
         if: matrix.toolchain == 'llvm'
         env:
-          HOMEBREW_NO_AUTO_UPDATE: "1"
           HOMEBREW_NO_INSTALL_CLEANUP: "1"
         run: |
+          brew update
           brew install "llvm@${LLVM_VERSION}" ninja
           prefix="$(brew --prefix "llvm@${LLVM_VERSION}")"
           echo "$prefix/bin" >> "$GITHUB_PATH"
@@ -93,19 +92,19 @@ jobs:
             ninja-build "gcc-${GCC_VERSION}" "g++-${GCC_VERSION}" \
             libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev \
             libxss-dev libxkbcommon-dev libxkbcommon-x11-dev libwayland-dev wayland-protocols \
-            libegl-dev libgl-dev libdbus-1-dev
+            libegl-dev libgl-dev libdbus-1-dev libxtst-dev libxrender-dev
           echo "CC=gcc-${GCC_VERSION}" >> "$GITHUB_ENV"
           echo "CXX=g++-${GCC_VERSION}" >> "$GITHUB_ENV"
 
       # configure & build
 
+      - name: Set up MSVC environment
+        if: matrix.toolchain == 'msvc'
+        uses: ilammy/msvc-dev-cmd@v1
+
       - name: Configure (Visual Studio)
         if: matrix.toolchain == 'msvc'
-        # VS generator ignores CMAKE_<LANG>_COMPILER_LAUNCHER
-        # documented sccache MSBuild hook - UseMultiToolTask gives us parallel cl.exe
-        run: >-
-          cmake -S . -B build -G "Visual Studio 18 2026" -A x64 -T "version=${MSVC_TOOLSET}"
-          -DCMAKE_VS_GLOBALS="CLToolExe=sccache.exe;CLToolPath=${SCCACHE_PATH%[\\/]*};TrackFileAccess=false;UseMultiToolTask=true"
+        run: cmake -S . -B build -G "Visual Studio 18 2026" -A x64
 
       - name: Configure (Ninja)
         if: matrix.toolchain != 'msvc'
@@ -117,7 +116,7 @@ jobs:
       - name: Verify pinned compiler
         run: |
           case '${{ matrix.toolchain }}' in
-            msvc)   want="19.${MSVC_TOOLSET#14.}" ;;
+            msvc)   want="19." ;;
             *llvm*) want="${LLVM_VERSION}." ;;
             *gcc*)  want="${GCC_VERSION}." ;;
           esac
@@ -125,7 +124,22 @@ jobs:
           echo "CXX compiler: $have (want ${want}*)"
           [[ "$have" == "$want"* ]]
 
+      - name: Install sccache cl.exe shim
+        if: matrix.toolchain == 'msvc'
+        run: |
+          mkdir -p C:/sccache-shim
+          cp "${SCCACHE_PATH%[\\/]*}/sccache.exe" C:/sccache-shim/cl.exe 2>/dev/null \
+            || cp "${SCCACHE_PATH%[\\/]*}/sccache" C:/sccache-shim/cl.exe
+
+      - name: Build (Visual Studio)
+        if: matrix.toolchain == 'msvc'
+        run: >-
+          cmake --build build --config Release --parallel --
+          -p:CLToolExe=cl.exe "-p:CLToolPath=C:/sccache-shim"
+          -p:TrackFileAccess=false -p:UseMultiToolTask=true
+
       - name: Build
+        if: matrix.toolchain != 'msvc'
         run: cmake --build build --config Release --parallel
 
       # package
