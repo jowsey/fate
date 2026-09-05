@@ -274,8 +274,15 @@ set(ASSIMP_BUILD_TESTS OFF)
 set(ASSIMP_BUILD_ASSIMP_TOOLS OFF)
 set(ASSIMP_INSTALL OFF)
 set(ASSIMP_WARNINGS_AS_ERRORS OFF)
+set(ASSIMP_BUILD_ZLIB ON)
 
 FetchContent_MakeAvailable(assimp)
+
+# assimp vendored zlib redefines fdopen to null causing some
+# nonsense on some apple sdk versions(?) fix if they update to zlib 1.3.1?
+if (APPLE AND TARGET zlibstatic)
+    target_compile_definitions(zlibstatic PRIVATE fdopen=fdopen)
+endif ()
 
 # mitigate stricter transitive includes on llvm 23, remove once assimp updates
 target_compile_options(assimp PRIVATE
