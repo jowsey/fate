@@ -16,17 +16,19 @@ namespace Fate {
     public:
         explicit SceneObject(std::string name);
 
-        [[nodiscard]] bool getActive() const { return active; }
+        [[nodiscard]] bool getActiveSelf() const;
+
+        [[nodiscard]] bool getActiveHierarchy() const;
 
         void setActive(bool newValue);
 
-        [[nodiscard]] const std::string& getName() const { return name; }
+        [[nodiscard]] const std::string& getName() const;
 
         void setName(const std::string_view& newValue);
 
-        [[nodiscard]] SceneTransform& getTransform() { return transform; }
+        [[nodiscard]] SceneTransform& getTransform();
 
-        [[nodiscard]] const std::vector<std::shared_ptr<Mesh>>& getMeshes() const { return meshes; }
+        [[nodiscard]] const std::vector<std::shared_ptr<Mesh>>& getMeshes() const;
 
         void addMesh(std::shared_ptr<Mesh> mesh);
     };

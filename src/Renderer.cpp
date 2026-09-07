@@ -718,7 +718,7 @@ namespace Fate {
         std::uint32_t objectIndex = 0;
 
         for (const auto& object: scene.getObjects()) {
-            if (!object->getActive()) continue;
+            if (!object->getActiveHierarchy()) continue;
 
             for (const auto& mesh: object->getMeshes()) {
                 VkDrawIndexedIndirectCommand command{

@@ -213,7 +213,7 @@ namespace Fate {
             return;
         }
 
-        bool active = selected->getActive();
+        bool active = selected->getActiveSelf();
         if (ImGui::Checkbox("##active", &active)) {
             selected->setActive(active);
         }
