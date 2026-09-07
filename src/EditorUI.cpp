@@ -154,13 +154,13 @@ namespace Fate {
     void HierarchyWindow::draw(const Scene& scene, SceneObject*& selected, Renderer& renderer) {
         ImGui::Begin("Hierarchy");
 
-        ImGui::DragScalarN("Camera position", ImGuiDataType_Double, &renderer.getCameraPosition().x, 3, 0.01f);
-        ImGui::DragFloat3("Camera rotation", &renderer.getCameraRotation().x, 0.1f);
-        ImGui::DragFloat("Camera FOV", &renderer.getCameraHorFovDegs(), 0.1f);
+        ImGui::DragScalarN("Camera position", ImGuiDataType_Double, &renderer.getCameraPosition().x, 3, 0.01f, 0, 0, "%g", ImGuiSliderFlags_NoRoundToFormat);
+        ImGui::DragFloat3("Camera rotation", &renderer.getCameraRotation().x, 0.1f, 0, 0, "%g", ImGuiSliderFlags_NoRoundToFormat);
+        ImGui::DragFloat("Camera FOV", &renderer.getCameraHorFovDegs(), 0.1f, 0, 0, "%g", ImGuiSliderFlags_NoRoundToFormat);
 
-        ImGui::DragFloat3("Light direction", &renderer.getLightDir().x, 0.01f);
+        ImGui::DragFloat3("Light direction", &renderer.getLightDir().x, 0.01f, 0, 0, "%g", ImGuiSliderFlags_NoRoundToFormat);
         ImGui::ColorEdit3("Light colour", &renderer.getLightColor().x);
-        ImGui::DragFloat("Light intensity", &renderer.getLightIntensity(), 0.01f);
+        ImGui::DragFloat("Light intensity", &renderer.getLightIntensity(), 0.01f, 0, 0, "%g", ImGuiSliderFlags_NoRoundToFormat);
 
         ImGui::Spacing();
         ImGui::Spacing();
@@ -241,13 +241,13 @@ namespace Fate {
         auto eulerAngles = transform.getEulerAngles();
         auto scale = transform.getLocalScale();
 
-        if (ImGui::DragScalarN("Position", ImGuiDataType_Double, &position.x, 3, 0.01f)) {
+        if (ImGui::DragScalarN("Position", ImGuiDataType_Double, &position.x, 3, 0.01f, 0, 0, "%g", ImGuiSliderFlags_NoRoundToFormat)) {
             transform.setPosition(position);
         }
-        if (ImGui::DragFloat3("Rotation", &eulerAngles.x, 0.1f)) {
+        if (ImGui::DragFloat3("Rotation", &eulerAngles.x, 0.1f, 0, 0, "%g", ImGuiSliderFlags_NoRoundToFormat)) {
             transform.setEulerAngles(eulerAngles);
         }
-        if (ImGui::DragFloat3("Scale", &scale.x, 0.01f)) {
+        if (ImGui::DragFloat3("Scale", &scale.x, 0.01f, 0, 0, "%g", ImGuiSliderFlags_NoRoundToFormat)) {
             transform.setLocalScale(scale);
         }
 
@@ -258,34 +258,28 @@ namespace Fate {
             ImGui::SeparatorText(("Mesh " + std::to_string(i)).c_str());
             ImGui::Text("%zu vertices, %zu indices", mesh->getVertices().size(), mesh->getIndices().size());
 
-            ImGui::SliderFloat("Metallic", &material->metallic, 0.0f, 1.0f);
-            ImGui::SliderFloat("Roughness", &material->roughness, 0.0f, 1.0f);
+            ImGui::SliderFloat("Metallic", &material->metallic, 0.0f, 1.0f, "%g", ImGuiSliderFlags_NoRoundToFormat);
+            ImGui::SliderFloat("Roughness", &material->roughness, 0.0f, 1.0f, "%g", ImGuiSliderFlags_NoRoundToFormat);
             ImGui::ColorEdit4("Base colour", &material->baseColour.x);
 
             ImGui::Text("Albedo map:");
             ImGui::SameLine();
-            ImGui::TextColored(material->albedoMap ? ImColor(0, 255, 0) : ImColor(255, 0, 0), "%s",
-                               material->albedoMap ? "yes" : "no");
+            ImGui::TextColored(material->albedoMap ? ImColor(0, 255, 0) : ImColor(255, 0, 0), "%s", material->albedoMap ? "yes" : "no");
             ImGui::Text("Normal map:");
             ImGui::SameLine();
-            ImGui::TextColored(material->normalMap ? ImColor(0, 255, 0) : ImColor(255, 0, 0), "%s",
-                               material->normalMap ? "yes" : "no");
+            ImGui::TextColored(material->normalMap ? ImColor(0, 255, 0) : ImColor(255, 0, 0), "%s", material->normalMap ? "yes" : "no");
             ImGui::Text("Ambient map:");
             ImGui::SameLine();
-            ImGui::TextColored(material->ambientMap ? ImColor(0, 255, 0) : ImColor(255, 0, 0), "%s",
-                               material->ambientMap ? "yes" : "no");
+            ImGui::TextColored(material->ambientMap ? ImColor(0, 255, 0) : ImColor(255, 0, 0), "%s", material->ambientMap ? "yes" : "no");
             ImGui::Text("Roughness map:");
             ImGui::SameLine();
-            ImGui::TextColored(material->roughnessMap ? ImColor(0, 255, 0) : ImColor(255, 0, 0), "%s",
-                               material->roughnessMap ? "yes" : "no");
+            ImGui::TextColored(material->roughnessMap ? ImColor(0, 255, 0) : ImColor(255, 0, 0), "%s", material->roughnessMap ? "yes" : "no");
             ImGui::Text("Metallic map:");
             ImGui::SameLine();
-            ImGui::TextColored(material->metallicMap ? ImColor(0, 255, 0) : ImColor(255, 0, 0), "%s",
-                               material->metallicMap ? "yes" : "no");
+            ImGui::TextColored(material->metallicMap ? ImColor(0, 255, 0) : ImColor(255, 0, 0), "%s", material->metallicMap ? "yes" : "no");
             ImGui::Text("Emissive map:");
             ImGui::SameLine();
-            ImGui::TextColored(material->emissiveMap ? ImColor(0, 255, 0) : ImColor(255, 0, 0), "%s",
-                               material->emissiveMap ? "yes" : "no");
+            ImGui::TextColored(material->emissiveMap ? ImColor(0, 255, 0) : ImColor(255, 0, 0), "%s", material->emissiveMap ? "yes" : "no");
         }
 
         ImGui::End();
