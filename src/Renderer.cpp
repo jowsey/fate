@@ -490,9 +490,16 @@ namespace Fate {
 
         io.Fonts->AddFontFromFileTTF((PathUtils::getEnginePath() / "resources/Fonts/Inter_18pt-Regular.ttf").string().c_str());
 
-        constexpr auto bgLight = ImColor(42, 42, 42);
-        constexpr auto bgDark = ImColor(26, 26, 26);
-        constexpr auto border = ImColor(64, 64, 64);
+        constexpr auto brand = ImVec4(219 / 255.0f, 106 / 255.0f, 247 / 255.0f, 1);
+
+        constexpr auto brandWhite = ImVec4(255 / 255.0f, 255 / 255.0f, 255 / 255.0f, 1);
+        constexpr auto brandLightest = ImVec4(56 / 255.0f, 56 / 255.0f, 56 / 255.0f, 1);
+        constexpr auto brandLighter = ImVec4(48 / 255.0f, 48 / 255.0f, 48 / 255.0f, 1);
+        constexpr auto brandLight = ImVec4(42 / 255.0f, 42 / 255.0f, 42 / 255.0f, 1);
+        constexpr auto brandNeutral = ImVec4(32 / 255.0f, 32 / 255.0f, 32 / 255.0f, 1);
+        constexpr auto brandDark = ImVec4(26 / 255.0f, 26 / 255.0f, 26 / 255.0f, 1);
+        constexpr auto brandDarker = ImVec4(24 / 255.0f, 24 / 255.0f, 24 / 255.0f, 1);
+        // constexpr auto brandDarkest = ImVec4(12 / 255.0f, 12 / 255.0f, 12 / 255.0f, 1);
 
         ImGuiStyle& style = ImGui::GetStyle();
         style.FontSizeBase = 16.0f;
@@ -500,16 +507,36 @@ namespace Fate {
 
         style.WindowRounding = 4.0f;
         style.PopupRounding = 4.0f;
-        style.FrameRounding = 2.0f;
+        style.FrameRounding = 4.0f;
 
         style.PopupBorderSize = 0.0f;
 
-        style.Colors[ImGuiCol_WindowBg] = bgLight;
-        style.Colors[ImGuiCol_TitleBg] = bgDark;
-        style.Colors[ImGuiCol_TitleBgActive] = bgDark;
-        style.Colors[ImGuiCol_MenuBarBg] = bgDark;
-        style.Colors[ImGuiCol_Border] = border;
-        style.Colors[ImGuiCol_PopupBg] = bgDark;
+        // Windows
+        style.Colors[ImGuiCol_WindowBg] = brandLight;
+        style.Colors[ImGuiCol_TitleBg] = brandDark;
+        style.Colors[ImGuiCol_TitleBgActive] = brandDark;
+        style.Colors[ImGuiCol_MenuBarBg] = brandDark;
+        style.Colors[ImGuiCol_Border] = brandLightest;
+        style.Colors[ImGuiCol_PopupBg] = brandDarker;
+
+        // Value frames
+        style.Colors[ImGuiCol_FrameBg] = brandNeutral;
+        style.Colors[ImGuiCol_FrameBgHovered] = brandDark;
+        style.Colors[ImGuiCol_FrameBgActive] = brandDarker;
+
+        // Tabs
+        style.Colors[ImGuiCol_Tab] = brandLight;
+        style.Colors[ImGuiCol_TabHovered] = brandLight;
+        style.Colors[ImGuiCol_TabDimmed] = brandLight;
+
+        style.Colors[ImGuiCol_TabSelected] = brandLighter;
+        style.Colors[ImGuiCol_TabSelectedOverline] = brand;
+        style.Colors[ImGuiCol_TabDimmedSelected] = brandLighter;
+        style.Colors[ImGuiCol_TabDimmedSelectedOverline] = brandLighter;
+
+        // Checkboxes
+        style.Colors[ImGuiCol_CheckMark] = brandWhite;
+        style.Colors[ImGuiCol_CheckboxSelectedBg] = brandNeutral;
 
         float contentScale = SDL_GetWindowDisplayScale(window);
         style.FontScaleDpi = contentScale;
