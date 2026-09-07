@@ -57,6 +57,8 @@ namespace Fate {
     }
 
     void EditorUI::drawMainMenuBar(const double deltaTime) {
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0);
+
         if (ImGui::BeginMainMenuBar()) {
             if (ImGui::BeginMenu("File")) {
                 if (ImGui::MenuItem("Exit")) {
@@ -108,6 +110,8 @@ namespace Fate {
 
             ImGui::EndMainMenuBar();
         }
+
+        ImGui::PopStyleVar();
     }
 
     void EditorUI::drawResourceUsageWindow(const Renderer& renderer) {
