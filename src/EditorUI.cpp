@@ -213,8 +213,27 @@ namespace Fate {
             return;
         }
 
-        ImGui::TextUnformatted(selected->getName().c_str());
+        bool active = selected->getActive();
+        if (ImGui::Checkbox("##active", &active)) {
+            selected->setActive(active);
+        }
+
+        ImGui::SameLine();
+
+        std::array<char, 256> nameBuffer{};
+        const std::string_view currentName = selected->getName();
+        const std::size_t copied = currentName.copy(nameBuffer.data(), nameBuffer.size() - 1);
+        nameBuffer[copied] = '\0';
+
+        ImGui::PushItemWidth(-FLT_MIN);
+        if (ImGui::InputText("##name", nameBuffer.data(), nameBuffer.size(), ImGuiInputTextFlags_AutoSelectAll)) {
+            selected->setName(nameBuffer.data());
+        }
+        ImGui::PopItemWidth();
+
+        ImGui::Spacing();
         ImGui::Separator();
+        ImGui::Spacing();
 
         SceneTransform& transform = selected->getTransform();
 

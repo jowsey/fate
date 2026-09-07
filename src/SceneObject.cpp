@@ -11,7 +11,11 @@ namespace Fate {
         meshes.push_back(std::move(mesh));
     }
 
-    void SceneObject::setName(const std::string& newName) {
-        name = newName;
+    void SceneObject::setActive(const bool newValue) {
+        this->active = newValue;
+    }
+
+    void SceneObject::setName(const std::string_view& newValue) {
+        this->name = newValue;
     }
 }

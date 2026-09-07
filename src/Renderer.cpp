@@ -691,6 +691,8 @@ namespace Fate {
         std::uint32_t objectIndex = 0;
 
         for (const auto& object: scene.getObjects()) {
+            if (!object->getActive()) continue;
+
             for (const auto& mesh: object->getMeshes()) {
                 VkDrawIndexedIndirectCommand command{
                     .indexCount = static_cast<std::uint32_t>(mesh->getIndices().size()),
@@ -699,7 +701,6 @@ namespace Fate {
                     .vertexOffset = static_cast<std::int32_t>(mesh->getGPUHandle()->verticesOffset),
                     .firstInstance = objectIndex++
                 };
-                drawCommands.push_back(command);
 
                 ObjectData objectData{
                     .model = object->getTransform().getWorldMatrix(),
@@ -717,6 +718,8 @@ namespace Fate {
                         .metallic = mesh->getMaterial()->metallic,
                     }
                 };
+
+                drawCommands.push_back(command);
                 objectDatas.push_back(objectData);
             }
         }
