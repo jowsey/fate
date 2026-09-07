@@ -4,7 +4,7 @@
     <h1>the Fate game engine</h1>
     <p>A modern, cross-platform game engine with a Vulkan renderer.</p>
     <br/>
-    <img src=".github/editor-screenshot.webp" width="768" alt="a screenshot of the fate editor rendering a scene showing the GLTF Sample Asset 'Damaged Helmet' before a modern-style skybox of Canary Wharf."/>
+    <img src="https://github.com/user-attachments/assets/790514e5-ecf0-4bf3-920c-e7856162458c" width="768" alt="a screenshot of the fate editor rendering a scene showing the GLTF Sample Asset 'Damaged Helmet' before a modern-style skybox of Canary Wharf."/>
 </div>
 
 # Usage
